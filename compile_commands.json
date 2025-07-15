@@ -1,8 +1,0 @@
-[
-{
-  "directory": "C:/Users/emiel/Documents/Development/academic/out/build/windows_msvc_ninja_x64",
-  "command": "C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\MSVC\\1443~1.348\\bin\\Hostx64\\x64\\cl.exe  /nologo /TP -IC:\\Users\\emiel\\Documents\\Development\\academic\\code\\. /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -MDd /Foexamples\\spinlock_mutex\\CMakeFiles\\spinlock_mutex_example.dir\\main.cpp.obj /Fdexamples\\spinlock_mutex\\CMakeFiles\\spinlock_mutex_example.dir\\ /FS -c C:\\Users\\emiel\\Documents\\Development\\academic\\examples\\spinlock_mutex\\main.cpp",
-  "file": "C:\\Users\\emiel\\Documents\\Development\\academic\\examples\\spinlock_mutex\\main.cpp",
-  "output": "examples\\spinlock_mutex\\CMakeFiles\\spinlock_mutex_example.dir\\main.cpp.obj"
-}
-]

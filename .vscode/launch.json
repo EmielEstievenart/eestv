@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Unit Tests",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/out/build/windows_msvc_ninja_x64/tests/unit_tests/unit_tests.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/out/build/windows_msvc_ninja_x64",
+            "environment": [],
+            "console": "integratedTerminal"
+        }
+    ]
+}
