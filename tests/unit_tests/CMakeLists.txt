@@ -14,7 +14,10 @@ if(EESTV_ENABLE_TESTS)
   FetchContent_MakeAvailable(googletest)
 
   # Add executable for unit tests
-  add_executable(unit_tests DiscoverableSocketTests.cpp)
+  add_executable(unit_tests 
+    DiscoverableSocketTests.cpp
+    udp_discovery_tests.cpp
+  )
 
   # Link libraries (assuming eestv_everything provides sources and Boost)
   target_link_libraries(unit_tests PRIVATE
