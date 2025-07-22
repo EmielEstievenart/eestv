@@ -1,7 +1,7 @@
 
 add_library(eestv_everything 
-    eestv/DiscoverableTcpSocket.cpp
-    eestv/DiscoveringTcpSocket.cpp
+    eestv/discoverable_tcp_socket.cpp
+    eestv/discovering_tcp_socket.cpp
     eestv/discoverable.cpp
     eestv/discoverable.hpp
     eestv/udp_discovery_server.cpp

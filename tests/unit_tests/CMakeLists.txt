@@ -15,7 +15,7 @@ if(EESTV_ENABLE_TESTS)
 
   # Add executable for unit tests
   add_executable(unit_tests 
-    DiscoverableSocketTests.cpp
+    discoverable_socket_tests.cpp
     udp_discovery_tests.cpp
   )
 

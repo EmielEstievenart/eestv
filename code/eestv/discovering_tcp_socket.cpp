@@ -1,5 +1,5 @@
 // DiscoveringTcpSocket.cpp
-#include "DiscoveringTcpSocket.hpp"
+#include "eestv/discovering_tcp_socket.hpp"
 #include <boost/system/system_error.hpp>
 
 DiscoveringTcpSocket::DiscoveringTcpSocket(boost::asio::io_context& io_context, const std::string& identifier, unsigned short udp_port)

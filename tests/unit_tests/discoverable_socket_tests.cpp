@@ -1,8 +1,8 @@
 // DiscoverableTcpSocketTest.cpp
 #include <gtest/gtest.h>
-#include "eestv/DiscoverableTcpSocket.hpp"
-#include "eestv/DiscoveringTcpSocket.hpp"
-#include <boost/asio.hpp>
+#include "eestv/discoverable_tcp_socket.hpp"
+#include "eestv/discovering_tcp_socket.hpp"
+#include "boost/asio.hpp"
 #include <thread>
 #include <chrono>
 
