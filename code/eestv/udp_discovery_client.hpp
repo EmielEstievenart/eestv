@@ -17,10 +17,10 @@ class UdpDiscoveryClient
       void stop();
 
     private:
-      void _send_discovery_request();
-      void _handle_response(const boost::system::error_code &error,
+      void send_discovery_request();
+      void handle_response(const boost::system::error_code &error,
                             std::size_t bytes_transferred);
-      void _handle_timeout(const boost::system::error_code &error);
+      void handle_timeout(const boost::system::error_code &error);
 
       boost::asio::io_context &_io_context;
       std::string _service_name;

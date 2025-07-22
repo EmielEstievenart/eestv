@@ -20,23 +20,22 @@ void UdpDiscoveryClient::start() {
 
   _running = true;
 
-  _send_discovery_request();
+  send_discovery_request();
 
   // Set up the retry timer
   _timer.expires_after(_retry_timeout);
   _timer.async_wait([this](const boost::system::error_code &error) {
-    _handle_timeout(error);
+    handle_timeout(error);
   });
 }
 
 void UdpDiscoveryClient::stop() {
   _running = false;
-
   _timer.cancel();
   _socket.cancel();
 }
 
-void UdpDiscoveryClient::_send_discovery_request() {
+void UdpDiscoveryClient::send_discovery_request() {
   if (!_running)
     return;
 
@@ -61,12 +60,12 @@ void UdpDiscoveryClient::_send_discovery_request() {
                               _remote_endpoint,
                               [this](const boost::system::error_code &error,
                                      std::size_t bytes_transferred) {
-                                _handle_response(error, bytes_transferred);
+                                handle_response(error, bytes_transferred);
                               });
                         });
 }
 
-void UdpDiscoveryClient::_handle_response(
+void UdpDiscoveryClient::handle_response(
     const boost::system::error_code &error, std::size_t bytes_transferred) {
   if (!_running)
     return;
@@ -99,7 +98,7 @@ void UdpDiscoveryClient::_handle_response(
   }
 }
 
-void UdpDiscoveryClient::_handle_timeout(
+void UdpDiscoveryClient::handle_timeout(
     const boost::system::error_code &error) {
   if (!_running || error == boost::asio::error::operation_aborted) {
     return;
@@ -113,11 +112,11 @@ void UdpDiscoveryClient::_handle_timeout(
   // Retry timeout expired, send another discovery request
   std::cout << "Retry timeout expired, sending discovery request for: "
             << _service_name << std::endl;
-  _send_discovery_request();
+  send_discovery_request();
 
   // Reset the timer for the next retry
   _timer.expires_after(_retry_timeout);
   _timer.async_wait([this](const boost::system::error_code &error) {
-    _handle_timeout(error);
+    handle_timeout(error);
   });
 }
