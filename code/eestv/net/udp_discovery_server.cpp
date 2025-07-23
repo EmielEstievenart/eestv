@@ -1,4 +1,4 @@
-#include "eestv/udp_discovery_server.hpp"
+#include "eestv/net/udp_discovery_server.hpp"
 #include <iostream>
 
 UdpDiscoveryServer::UdpDiscoveryServer(boost::asio::io_context& io_context, int port)

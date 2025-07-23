@@ -1,5 +1,5 @@
 // DiscoveringTcpSocket.cpp
-#include "eestv/discovering_tcp_socket.hpp"
+#include "eestv/net/discovering_tcp_socket.hpp"
 
 DiscoveringTcpSocket::DiscoveringTcpSocket(boost::asio::io_context& io_context, 
                                          const std::string& identifier, 

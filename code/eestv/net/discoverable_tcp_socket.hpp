@@ -1,8 +1,8 @@
 // DiscoverableTcpSocket.hpp
 #pragma once
 
-#include "eestv/udp_discovery_server.hpp"
-#include "eestv/discoverable.hpp"
+#include "eestv/net/udp_discovery_server.hpp"
+#include "eestv/net/discoverable.hpp"
 #include <boost/asio.hpp>
 #include <string>
 #include <memory>

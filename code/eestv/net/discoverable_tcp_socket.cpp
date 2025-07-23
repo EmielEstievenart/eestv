@@ -1,5 +1,5 @@
 // DiscoverableTcpSocket.cpp
-#include "eestv/discoverable_tcp_socket.hpp"
+#include "eestv/net/discoverable_tcp_socket.hpp"
 #include <boost/system/system_error.hpp>
 
 DiscoverableTcpSocket::DiscoverableTcpSocket(
