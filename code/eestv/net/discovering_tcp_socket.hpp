@@ -39,7 +39,8 @@ using boost::asio::ip::tcp;
  * io_context.run();
  * @endcode
  */
-class DiscoveringTcpSocket : public tcp::socket {
+class DiscoveringTcpSocket : public tcp::socket
+{
 private:
     std::string _identifier;
     unsigned short _udp_port;
@@ -55,55 +56,53 @@ public:
      * @param udp_port The UDP port for discovery requests.
      * @param retry_timeout The timeout between discovery retries (default: 1 second).
      */
-    DiscoveringTcpSocket(boost::asio::io_context& io_context, 
-                        const std::string& identifier, 
-                        unsigned short udp_port,
-                        std::chrono::milliseconds retry_timeout = std::chrono::seconds(1));
-    
+    DiscoveringTcpSocket(boost::asio::io_context& io_context, const std::string& identifier, unsigned short udp_port,
+                         std::chrono::milliseconds retry_timeout = std::chrono::seconds(1));
+
     /**
      * @brief Asynchronously connects to a discovered TCP service.
      * @param handler Completion handler called when connection completes or fails.
      *               Handler signature: void(boost::system::error_code ec)
      */
-    template<typename CompletionHandler>
-    void async_connect_via_discovery(CompletionHandler&& handler);
+    template <typename CompletionHandler> void async_connect_via_discovery(CompletionHandler&& handler);
 };
 
 // Template method implementation
-template<typename CompletionHandler>
-void DiscoveringTcpSocket::async_connect_via_discovery(CompletionHandler&& handler) {
+template <typename CompletionHandler> void DiscoveringTcpSocket::async_connect_via_discovery(CompletionHandler&& handler)
+{
     // Create the discovery client with a response handler
     _discovery_client = std::make_unique<UdpDiscoveryClient>(
-        _io_context, 
-        _identifier, 
-        _retry_timeout, 
-        _udp_port,
-        [this, handler = std::forward<CompletionHandler>(handler)](const std::string& response) mutable -> bool {
-            try {
+        _io_context, _identifier, _retry_timeout, _udp_port,
+        [this, handler = std::forward<CompletionHandler>(handler)](const std::string& response) mutable -> bool
+        {
+            try
+            {
                 // Parse the discovered port
                 unsigned short discovered_port = static_cast<unsigned short>(std::stoul(response));
-                
+
                 // Stop the discovery client
                 _discovery_client->stop();
-                
+
                 // Connect to the discovered service (assume localhost for now)
                 tcp::endpoint service_endpoint(boost::asio::ip::make_address("127.0.0.1"), discovered_port);
-                
+
                 // Perform async TCP connection
-                this->async_connect(service_endpoint, 
-                    [handler = std::move(handler)](boost::system::error_code ec) mutable {
-                        // Call the completion handler with the result
-                        handler(ec);
-                    });
-                
+                this->async_connect(service_endpoint,
+                                    [handler = std::move(handler)](boost::system::error_code ec) mutable
+                                    {
+                                        // Call the completion handler with the result
+                                        handler(ec);
+                                    });
+
                 return true; // Stop discovery after first response
-            } catch (const std::exception& e) {
+            }
+            catch (const std::exception& e)
+            {
                 // Invalid response, continue discovery
                 return false;
             }
-        }
-    );
-    
+        });
+
     // Start the discovery process
     _discovery_client->start();
 }

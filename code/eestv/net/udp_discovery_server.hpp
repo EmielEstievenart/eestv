@@ -6,7 +6,8 @@
 #include <unordered_map>
 #include <array>
 
-class UdpDiscoveryServer {
+class UdpDiscoveryServer
+{
 
 public:
     /**
@@ -15,7 +16,7 @@ public:
      * @param port The UDP port to listen on for discovery requests.
      */
     UdpDiscoveryServer(boost::asio::io_context& io_context, int port);
-    
+
     /**
      * @brief Destroys the UdpDiscoveryServer and closes the UDP socket.
      */
@@ -29,7 +30,7 @@ public:
      * the server is destroyed.
      */
     void start();
-    
+
     /**
      * @brief Registers a discoverable service with the server.
      * @param discoverable The Discoverable object to register. Its identifier
@@ -38,21 +39,21 @@ public:
      * Note: If a service with the same identifier already exists, it will be
      * replaced with the new one.
      */
-    void add_discoverable(const Discoverable &discoverable);
+    void add_discoverable(const Discoverable& discoverable);
 
-private: 
+private:
     /**
      * @brief Initiates an asynchronous receive operation.
      */
     void start_receive();
-    
+
     /**
      * @brief Handles received UDP data and processes discovery requests.
      * @param error Error code from the receive operation.
      * @param bytes_transferred Number of bytes received.
      */
     void handle_receive(const boost::system::error_code& error, std::size_t bytes_transferred);
-    
+
     /**
      * @brief Handles completion of send operations.
      * @param error Error code from the send operation.
