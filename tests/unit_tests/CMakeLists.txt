@@ -15,8 +15,9 @@ if(EESTV_ENABLE_TESTS)
 
   # Add executable for unit tests
   add_executable(unit_tests 
-    discoverable_socket_tests.cpp
-    udp_discovery_tests.cpp
+    net/discoverable_socket_tests.cpp
+    net/udp_discovery_tests.cpp
+    data/linear_buffer_tests.cpp
   )
 
   # Link libraries (assuming eestv_everything provides sources and Boost)

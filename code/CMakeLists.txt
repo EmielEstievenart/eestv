@@ -8,7 +8,11 @@ add_library(eestv_everything
     eestv/net/udp_discovery_server.hpp
     eestv/net/udp_discovery_client.cpp
     eestv/net/udp_discovery_client.hpp
+    eestv/net/tcp_connection.cpp
+    eestv/net/tcp_connection.hpp
     eestv/threading/spinlock_mutex.hpp
+    eestv/data/linear_buffer.hpp
+    eestv/data/linear_buffer.cpp
 )
 
 target_include_directories(eestv_everything
