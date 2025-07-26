@@ -1,2 +1,3 @@
 
 add_subdirectory(spinlock_mutex)
+add_subdirectory(templates)
