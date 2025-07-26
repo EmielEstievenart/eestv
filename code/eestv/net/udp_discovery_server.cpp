@@ -21,6 +21,7 @@ void UdpDiscoveryServer::start()
 
 void UdpDiscoveryServer::add_discoverable(const Discoverable& discoverable)
 {
+    std::lock_guard<std::mutex> lock(_discoverables_mutex);
     _discoverables.emplace(discoverable.get_identifier(), discoverable);
 }
 
@@ -39,12 +40,19 @@ void UdpDiscoveryServer::handle_receive(const boost::system::error_code& error, 
         std::string received_identifier(_recv_buffer.data(), bytes_transferred);
 
         // Look for the identifier in our discoverables
-        auto it = _discoverables.find(received_identifier);
-        if (it != _discoverables.end())
+        std::string reply;
         {
-            // Get the reply from the discoverable
-            std::string reply = it->second.get_reply();
-
+            std::lock_guard<std::mutex> lock(_discoverables_mutex);
+            auto it = _discoverables.find(received_identifier);
+            if (it != _discoverables.end())
+            {
+                // Get the reply from the discoverable
+                reply = it->second.get_reply();
+            }
+        }
+        
+        if (!reply.empty())
+        {
             // Send the reply back to the requester
             auto send_buffer = std::make_shared<std::string>(reply);
             _socket.async_send_to(boost::asio::buffer(*send_buffer), _remote_endpoint,

@@ -5,6 +5,7 @@
 #include "boost/asio/io_context.hpp"
 #include <unordered_map>
 #include <array>
+#include <mutex>
 
 class UdpDiscoveryServer
 {
@@ -66,5 +67,6 @@ private:
     boost::asio::ip::udp::endpoint _remote_endpoint;
     std::array<char, 1024> _recv_buffer;
     std::unordered_map<std::string, Discoverable> _discoverables;
+    mutable std::mutex _discoverables_mutex;  // Add mutex for thread safety
     int _port;
 };

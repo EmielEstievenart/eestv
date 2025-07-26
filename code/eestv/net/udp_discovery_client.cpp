@@ -3,7 +3,7 @@
 
 UdpDiscoveryClient::UdpDiscoveryClient(boost::asio::io_context& io_context, const std::string& service_name,
                                        std::chrono::milliseconds retry_timeout, int port,
-                                       std::function<bool(const std::string&)> response_handler)
+                                       std::function<bool(const std::string&, const boost::asio::ip::udp::endpoint&)> response_handler)
     : _io_context(io_context)
     , _service_name(service_name)
     , _retry_timeout(retry_timeout)
@@ -76,8 +76,8 @@ void UdpDiscoveryClient::handle_response(const boost::system::error_code& error,
         std::cout << "Discovery response from " << _remote_endpoint << ": " << response << std::endl;
         if (_response_handler)
         {
-            // Call the response handler with the received response
-            if (_response_handler(response))
+            // Call the response handler with the received response and remote endpoint
+            if (_response_handler(response, _remote_endpoint))
             {
                 std::cout << "Response handled successfully." << std::endl;
                 _timer.cancel();

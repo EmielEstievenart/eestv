@@ -65,6 +65,16 @@ public:
      *               Handler signature: void(boost::system::error_code ec)
      */
     template <typename CompletionHandler> void async_connect_via_discovery(CompletionHandler&& handler);
+
+    /**
+     * @brief Destructor - ensures proper cleanup of discovery client.
+     */
+    ~DiscoveringTcpSocket();
+
+    /**
+     * @brief Cancels any ongoing discovery operation.
+     */
+    void cancel_discovery();
 };
 
 // Template method implementation
@@ -73,7 +83,8 @@ template <typename CompletionHandler> void DiscoveringTcpSocket::async_connect_v
     // Create the discovery client with a response handler
     _discovery_client = std::make_unique<UdpDiscoveryClient>(
         _io_context, _identifier, _retry_timeout, _udp_port,
-        [this, handler = std::forward<CompletionHandler>(handler)](const std::string& response) mutable -> bool
+        [this, handler = std::forward<CompletionHandler>(handler)](
+            const std::string& response, const boost::asio::ip::udp::endpoint& remote_endpoint) mutable -> bool
         {
             try
             {
@@ -83,16 +94,16 @@ template <typename CompletionHandler> void DiscoveringTcpSocket::async_connect_v
                 // Stop the discovery client
                 _discovery_client->stop();
 
-                // Connect to the discovered service (assume localhost for now)
-                tcp::endpoint service_endpoint(boost::asio::ip::make_address("127.0.0.1"), discovered_port);
+                // Connect to the discovered service using the remote endpoint's address
+                tcp::endpoint service_endpoint(remote_endpoint.address(), discovered_port);
 
                 // Perform async TCP connection
                 this->async_connect(service_endpoint,
-                                    [handler = std::move(handler)](boost::system::error_code ec) mutable
-                                    {
-                                        // Call the completion handler with the result
-                                        handler(ec);
-                                    });
+                                   [handler = std::move(handler)](boost::system::error_code ec) mutable
+                                   {
+                                       // Call the completion handler with the result
+                                       handler(ec);
+                                   });
 
                 return true; // Stop discovery after first response
             }
