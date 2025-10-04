@@ -17,8 +17,8 @@ if(EESTV_ENABLE_TESTS)
     unit_tests net/discoverable_socket_tests.cpp net/udp_discovery_tests.cpp
                data/linear_buffer_tests.cpp serial/serialization_tests.cpp)
 
-  # Link libraries (assuming eestv_everything provides sources and Boost)
-  target_link_libraries(unit_tests PRIVATE eestv_everything GTest::gtest_main)
+  # Link libraries (assuming eestv_lib provides sources and Boost)
+  target_link_libraries(unit_tests PRIVATE eestv_lib GTest::gtest_main)
 
   # Enable testing
   enable_testing()
