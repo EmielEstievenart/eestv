@@ -144,17 +144,17 @@ TEST_F(UdpDiscoveryTest, DiscoveryClientServer)
     bool response_is_correct = false;
     std::string received_response;
 
-    client =
-        std::make_unique<UdpDiscoveryClient>(io_context, TEST_IDENTIFIER, std::chrono::milliseconds(1000), TEST_PORT,
-                                             [&response_received, &response_is_correct, &received_response](const std::string& response)
-                                             {
-                                                 // For testing, we just print the response
-                                                 std::cout << "Received response: " << response << std::endl;
-                                                 received_response   = response;
-                                                 response_received   = true;
-                                                 response_is_correct = (response == TEST_REPLY);
-                                                 return true; // Indicate that the response was handled successfully
-                                             });
+    client = std::make_unique<UdpDiscoveryClient>(io_context, TEST_IDENTIFIER, std::chrono::milliseconds(1000), TEST_PORT,
+                                                  [&response_received, &response_is_correct, &received_response](
+                                                      const std::string& response, const boost::asio::ip::udp::endpoint& /*endpoint*/)
+                                                  {
+                                                      // For testing, we just print the response
+                                                      std::cout << "Received response: " << response << std::endl;
+                                                      received_response   = response;
+                                                      response_received   = true;
+                                                      response_is_correct = (response == TEST_REPLY);
+                                                      return true; // Continue processing
+                                                  });
 
     client->start();
 

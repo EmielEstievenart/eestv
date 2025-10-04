@@ -8,7 +8,7 @@ Language: Cpp
 AccessModifierOffset: -4
 AlignAfterOpenBracket: true
 AlignConsecutiveAssignments: true
-AlignEscapedNewlines : Left
+AlignEscapedNewlines: Left
 AlignOperands: true
 AlignTrailingComments: true
 AllowAllParametersOfDeclarationOnNextLine: true
@@ -18,7 +18,7 @@ AllowShortFunctionsOnASingleLine: InlineOnly
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 AlwaysBreakBeforeMultilineStrings: false
-AlwaysBreakTemplateDeclarations: false
+AlwaysBreakTemplateDeclarations: true
 BinPackArguments: true
 BinPackParameters: true
 BreakBeforeBinaryOperators: None
@@ -62,19 +62,19 @@ SortIncludes: false
 IncludeBlocks: Regroup
 IncludeCategories:
   # Match specific headers (in this case, testing related)
-  - Regex:           '.*(gtest|gmock|gunit).*'
-    Priority:        2
+  - Regex: ".*(gtest|gmock|gunit).*"
+    Priority: 2
 
   # Match any <> header with no . or / in it; basically anything
   # in the standard library
-  - Regex:           '<[0-9a-z_]+>'
-    Priority:        4
+  - Regex: "<[0-9a-z_]+>"
+    Priority: 4
 
   # Match any other <> include; since standard library is matched
   # above, these are 'third party' includes
-  - Regex:           '<.*>'
-    Priority:        3
+  - Regex: "<.*>"
+    Priority: 3
 
   # Else
-  - Regex:           '.*'
-    Priority:        1
+  - Regex: ".*"
+    Priority: 1

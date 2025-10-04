@@ -12,10 +12,7 @@ protected:
         buffer = std::make_unique<LinearBuffer>(100);
     }
 
-    void TearDown() override
-    {
-        buffer.reset();
-    }
+    void TearDown() override { buffer.reset(); }
 
     std::unique_ptr<LinearBuffer> buffer;
 };
@@ -167,9 +164,9 @@ TEST_F(LinearBufferTest, ConsumePartialData)
 
     // Verify remaining data
     std::size_t size_out;
-    const void* data = buffer->peek(size_out);
+    const void* data      = buffer->peek(size_out);
     const char* char_data = static_cast<const char*>(data);
-    
+
     EXPECT_EQ(size_out, 5);
     EXPECT_EQ(std::strncmp(char_data, "World", 5), 0);
 }
@@ -208,7 +205,7 @@ TEST_F(LinearBufferTest, NoResetOnPartialConsumption)
     std::size_t size_out;
     const void* data = buffer->peek(size_out);
     EXPECT_EQ(size_out, 5);
-    
+
     const char* char_data = static_cast<const char*>(data);
     EXPECT_EQ(std::strncmp(char_data, "World", 5), 0);
 }
@@ -256,11 +253,11 @@ TEST_F(LinearBufferTest, PushAfterReset)
 
     // After reset, should be able to push new data from the beginning
     buffer->push("Second", 6);
-    
+
     std::size_t size_out;
-    const void* data = buffer->peek(size_out);
+    const void* data      = buffer->peek(size_out);
     const char* char_data = static_cast<const char*>(data);
-    
+
     EXPECT_EQ(size_out, 6);
     EXPECT_EQ(std::strncmp(char_data, "Second", 6), 0);
 }
@@ -271,22 +268,22 @@ TEST_F(LinearBufferTest, MultipleOperationSequence)
     // Push, peek, consume in various combinations
     buffer->push("ABC", 3);
     buffer->push("DEF", 3);
-    
+
     std::size_t size_out;
     const void* data = buffer->peek(size_out);
     EXPECT_EQ(size_out, 6);
-    
+
     buffer->consume(2); // Consume "AB"
     data = buffer->peek(size_out);
     EXPECT_EQ(size_out, 4);
-    
+
     const char* char_data = static_cast<const char*>(data);
     EXPECT_EQ(std::strncmp(char_data, "CDEF", 4), 0);
-    
+
     buffer->push("GHI", 3);
     data = buffer->peek(size_out);
     EXPECT_EQ(size_out, 7);
-    
+
     char_data = static_cast<const char*>(data);
     EXPECT_EQ(std::strncmp(char_data, "CDEFGHI", 7), 0);
 }
