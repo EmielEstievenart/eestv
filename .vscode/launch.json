@@ -22,6 +22,27 @@
             "cwd": "${workspaceFolder}/out/build/windows_msvc_ninja_x64",
             "environment": [],
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Run SFINAE Example",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/out/build/windows_msvc_ninja_x64/examples/sfinae/sfinae.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/out/build/windows_msvc_ninja_x64",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Debug CMake Target",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${command:cmake.launchTargetPath}",
+            "args": [],
+            "cwd": "${command:cmake.launchTargetDirectory}",
+            "preLaunchTask": "CMake: build",
+            "console": "integratedTerminal"
         }
     ]
 }
