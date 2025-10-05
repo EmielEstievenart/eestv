@@ -4,7 +4,9 @@
 #include <boost/asio.hpp>
 #include <chrono>
 #include <gtest/gtest.h>
+#ifdef WIN32
 #include <mswsockdef.h>
+#endif //WIN32
 #include <string>
 #include <thread>
 

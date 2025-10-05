@@ -53,7 +53,6 @@ int main()
 
     move_the_robot(walker);
 
-    eestv::move_the_robot(flyer);
 
     eestv::do_magic_addition();
 
