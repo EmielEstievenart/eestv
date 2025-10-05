@@ -22,5 +22,8 @@ if(EESTV_ENABLE_TESTS)
 
   # Enable testing
   enable_testing()
-  add_test(NAME DiscoveryTest COMMAND unit_tests)
+
+  # Discover all Google Test cases automatically
+  include(GoogleTest)
+  gtest_discover_tests(unit_tests)
 endif()
