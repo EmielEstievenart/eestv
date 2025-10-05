@@ -1,5 +1,5 @@
-#include "eestv/net/discoverable.hpp"
-#include "eestv/net/udp_discovery_server.hpp"
+#include "eestv/net/discovery/discoverable.hpp"
+#include "eestv/net/discovery/udp_discovery_server.hpp"
 #include <boost/asio.hpp>
 #include <chrono>
 #include <gtest/gtest.h>

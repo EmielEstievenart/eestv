@@ -95,8 +95,8 @@ int main()
     std::cout << "----------------------\n";
 
     // Demonstrate using the convenience type aliases
-    IntExecutable1 aliasedIntExec(ALIAS_INT_VALUE, "AliasedInt");
-    DoubleExecutable2 aliasedDoubleExec(PI_VALUE, ALIAS_DOUBLE_MULTIPLIER, "AliasedDouble");
+    TemplatedExecutable1<int> aliasedIntExec(ALIAS_INT_VALUE, "AliasedInt");
+    TemplatedExecutable2<double> aliasedDoubleExec(PI_VALUE, ALIAS_DOUBLE_MULTIPLIER, "AliasedDouble");
 
     executor.executeSequence(aliasedIntExec, aliasedDoubleExec);
     std::cout << '\n';

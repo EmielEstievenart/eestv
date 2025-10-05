@@ -50,7 +50,7 @@ TEST_F(DiscoverableTcpSocketTest, DiscoveryAndConnection)
 
     ASSERT_TRUE(discovering.is_open());
 
-    tcp::socket accepted_socket(io_context_);
+    boost::asio::ip::tcp::socket accepted_socket(io_context_);
 
     // Use async_accept with a promise/future for synchronous testing
     std::promise<boost::system::error_code> accept_promise;
