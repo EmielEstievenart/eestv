@@ -18,18 +18,6 @@ add_executable(
 # Link libraries (assuming eestv_lib provides sources and Boost)
 target_link_libraries(unit_tests PRIVATE eestv_lib GTest::gtest_main)
 
-# Add executable for unit tests
-add_executable(
-  unit_tests net/discoverable_socket_tests.cpp net/udp_discovery_tests.cpp
-             data/linear_buffer_tests.cpp serial/serialization_tests.cpp)
-
-# Link libraries (assuming eestv_lib provides sources and Boost)
-target_link_libraries(unit_tests PRIVATE eestv_lib GTest::gtest_main)
-
-# Enable testing
-enable_testing()
-
 # Discover all Google Test cases automatically
 include(GoogleTest)
 gtest_discover_tests(unit_tests)
-endif()
