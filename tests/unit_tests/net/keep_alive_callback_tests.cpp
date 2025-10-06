@@ -1,5 +1,5 @@
-#include "eestv/net/client_connection.hpp"
-#include "eestv/net/server_connection.hpp"
+#include "eestv/net/tcp_client_connection.hpp"
+#include "eestv/net/tcp_server_connection.hpp"
 #include "eestv/net/tcp_server.hpp"
 #include <boost/asio.hpp>
 #include <gtest/gtest.h>
@@ -17,7 +17,7 @@ TEST(KeepAliveCallbackTests, CallbackCanBeSet)
     boost::asio::io_context io_context;
     boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address("127.0.0.1"), 54321);
 
-    auto connection = std::make_shared<ClientConnection<>>(endpoint, io_context, std::chrono::seconds(1));
+    auto connection = std::make_shared<TcpClientConnection<>>(endpoint, io_context, std::chrono::seconds(1));
 
     bool callback_was_called = false;
 
@@ -43,7 +43,7 @@ TEST(KeepAliveCallbackTests, CallbackCanReturnFalse)
     boost::asio::io_context io_context;
     boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address("127.0.0.1"), 54322);
 
-    auto connection = std::make_shared<ClientConnection<>>(endpoint, io_context, std::chrono::seconds(1));
+    auto connection = std::make_shared<TcpClientConnection<>>(endpoint, io_context, std::chrono::seconds(1));
 
     // Set a callback that returns false
     connection->set_keep_alive_callback([]() -> std::pair<bool, std::vector<char>> { return {false, {}}; });
@@ -60,7 +60,7 @@ TEST(KeepAliveCallbackTests, CallbackWithEmptyData)
     boost::asio::io_context io_context;
     boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address("127.0.0.1"), 54323);
 
-    auto connection = std::make_shared<ClientConnection<>>(endpoint, io_context, std::chrono::seconds(1));
+    auto connection = std::make_shared<TcpClientConnection<>>(endpoint, io_context, std::chrono::seconds(1));
 
     // Set a callback that returns true but empty data
     connection->set_keep_alive_callback([]() -> std::pair<bool, std::vector<char>> { return {true, {}}; });
@@ -77,7 +77,7 @@ TEST(KeepAliveCallbackTests, CustomProtocolMessage)
     boost::asio::io_context io_context;
     boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address("127.0.0.1"), 54324);
 
-    auto connection = std::make_shared<ClientConnection<>>(endpoint, io_context, std::chrono::seconds(1));
+    auto connection = std::make_shared<TcpClientConnection<>>(endpoint, io_context, std::chrono::seconds(1));
 
     std::string expected_msg = "CUSTOM_PROTOCOL_PING\n";
 

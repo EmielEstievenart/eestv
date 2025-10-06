@@ -1,4 +1,4 @@
-#include "eestv/net/client_connection.hpp"
+#include "eestv/net/tcp_client_connection.hpp"
 #include "eestv/net/tcp_server.hpp"
 #include "eestv/logging/eestv_logging.hpp"
 #include <boost/asio.hpp>
@@ -16,11 +16,11 @@ void run_server_example()
     EESTV_LOG_INFO("Server listening on port " << server.port());
 
     // Keep track of active connections
-    std::vector<std::shared_ptr<eestv::ServerConnection<>>> connections;
+    std::vector<std::shared_ptr<eestv::TcpServerConnection<>>> connections;
 
     // Set callback for new connections
     server.set_connection_callback(
-        [&connections](std::shared_ptr<eestv::ServerConnection<>> connection)
+        [&connections](std::shared_ptr<eestv::TcpServerConnection<>> connection)
         {
             EESTV_LOG_INFO("Client connected!");
 
@@ -70,7 +70,7 @@ void run_client_example()
 
     // Create a client connection (will automatically reconnect when lost)
     // Note: Uses default ArrayBufferAdapter<4096> buffer
-    auto client_conn = std::make_shared<eestv::ClientConnection<>>(endpoint, io_context, std::chrono::seconds(5));
+    auto client_conn = std::make_shared<eestv::TcpClientConnection<>>(endpoint, io_context, std::chrono::seconds(5));
 
     // Configure reconnection behavior
     client_conn->set_auto_reconnect(true);

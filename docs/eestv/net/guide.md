@@ -8,11 +8,11 @@ The eestv network library provides components for TCP connections with automatic
 
 ### Connection Classes
 
-The library provides a base `Connection` class and two derived implementations:
+The library provides a base `TcpConnection` class and two derived implementations:
 
-- **`Connection`** (abstract base): Provides connection monitoring, keepalive/ping functionality, and connection-lost callbacks
-- **`ClientConnection`**: Client-side connection with automatic reconnection using exponential backoff
-- **`ServerConnection`**: Server-side connection that marks itself as dead when the connection is lost
+- **`TcpConnection`** (abstract base): Provides connection monitoring, keepalive/ping functionality, and connection-lost callbacks
+- **`TcpClientConnection`**: Client-side connection with automatic reconnection using exponential backoff
+- **`TcpServerConnection`**: Server-side connection that marks itself as dead when the connection is lost
 
 See `docs/eestv/net/connection_architecture.md` for detailed architecture documentation.
 
@@ -34,7 +34,7 @@ These components allow you to implement service discovery patterns where servers
 boost::asio::io_context io_context;
 
 // Create client connection to a remote endpoint
-auto connection = std::make_shared<eestv::net::ClientConnection>(
+auto connection = std::make_shared<eestv::net::TcpClientConnection>(
     io_context,
     boost::asio::ip::tcp::endpoint(
         boost::asio::ip::address::from_string("192.168.1.100"), 
@@ -59,7 +59,7 @@ io_context.run();
 // Accept a connection on the server side
 acceptor.async_accept([](boost::system::error_code ec, boost::asio::ip::tcp::socket socket) {
     if (!ec) {
-        auto connection = std::make_shared<eestv::net::ServerConnection>(
+        auto connection = std::make_shared<eestv::net::TcpServerConnection>(
             std::move(socket)
         );
         
@@ -84,13 +84,13 @@ For service discovery, use the low-level components directly:
 **Client side:**
 1. Create a `UdpDiscoveryClient` and start discovery for the desired identifier
 2. When a response with a TCP port is received, stop discovery
-3. Connect a `ClientConnection` to the discovered endpoint
+3. Connect a `TcpClientConnection` to the discovered endpoint
 
 ## Key Points
 
 - **Connection Monitoring**: Both client and server connections support keepalive monitoring
 - **Custom Keep-Alive**: Use `set_keep_alive_callback()` to define protocol-specific keep-alive messages
-- **Auto-Reconnect**: `ClientConnection` automatically reconnects with exponential backoff
+- **Auto-Reconnect**: `TcpClientConnection` automatically reconnects with exponential backoff
 - **Callbacks**: Use connection-lost callbacks to handle disconnection events
 - **Service Discovery**: Use the low-level discovery components to build custom discovery patterns
 - **Thread-Safe**: All components use Boost.Asio's io_context for thread safety
