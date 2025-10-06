@@ -17,6 +17,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# On Windows ensure a minimum _WIN32_WINNT is defined so system headers (and
+# Boost.Asio) target the correct Win32 APIs and avoid warnings.
+if(WIN32)
+  add_compile_definitions(_WIN32_WINNT=0x0601)
+endif()
+
 enable_testing()
 
 add_subdirectory(code)
