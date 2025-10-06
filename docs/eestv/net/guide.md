@@ -1,157 +1,119 @@
-# Discoverable Sockets User Guide
+# Network Library User Guide
 
 ## Overview
 
-The discoverable sockets library provides automatic service discovery for TCP connections. Servers advertise themselves via UDP, and clients automatically discover and connect without needing to know IP addresses or ports in advance.
+The eestv network library provides components for TCP connections with automatic reconnection, keepalive monitoring, and optional UDP-based service discovery.
 
 ## Components
 
-**DiscoverableTcpSocket** - Server that advertises itself via UDP  
-**DiscoveringTcpSocket** - Client that discovers and connects to servers
+### Connection Classes
 
-## Architecture
+The library provides a base `Connection` class and two derived implementations:
 
-### Component Structure
+- **`Connection`** (abstract base): Provides connection monitoring, keepalive/ping functionality, and connection-lost callbacks
+- **`ClientConnection`**: Client-side connection with automatic reconnection using exponential backoff
+- **`ServerConnection`**: Server-side connection that marks itself as dead when the connection is lost
 
-```mermaid
-graph TB
-    subgraph "Server Side"
-        DTS[DiscoverableTcpSocket]
-        UDS[UdpDiscoveryServer]
-        DISC[Discoverable]
-        TCP_ACC[TCP Acceptor]
-        
-        DTS -->|owns| UDS
-        DTS -->|owns| DISC
-        DTS -->|owns| TCP_ACC
-        UDS -->|registers| DISC
-    end
-    
-    subgraph "Client Side"
-        DTCS[DiscoveringTcpSocket]
-        UDC[UdpDiscoveryClient]
-        TCP_SOCK[TCP Socket]
-        
-        DTCS -->|owns| UDC
-        DTCS -->|inherits from| TCP_SOCK
-    end
-    
-    UDC -.->|UDP broadcast| UDS
-    UDS -.->|UDP response| UDC
-    TCP_SOCK -->|TCP connect| TCP_ACC
-    
-    style DTS fill:#ffcccc
-    style DTCS fill:#ccccff
-    style UDS fill:#ffffcc
-    style UDC fill:#ffffcc
-    style TCP_ACC fill:#ccffcc
-    style TCP_SOCK fill:#ccffcc
-```
+See `docs/eestv/net/connection_architecture.md` for detailed architecture documentation.
 
-### Discovery Protocol Flow
+### Discovery Components
 
-```mermaid
-sequenceDiagram
-    participant App as Application
-    participant DTS as DiscoverableTcpSocket
-    participant UDS as UdpDiscoveryServer
-    participant Net as Network
-    participant UDC as UdpDiscoveryClient
-    participant DTCS as DiscoveringTcpSocket
-    
-    App->>DTS: Create("service_name", udp_port, tcp_port=0)
-    DTS->>UDS: Create UdpDiscoveryServer
-    DTS->>DTS: Create TCP Acceptor (dynamic port)
-    App->>DTS: start()
-    DTS->>UDS: add_discoverable("service_name", tcp_port_callback)
-    UDS->>Net: Listen on UDP port
-    
-    Note over DTCS,UDC: Client Side
-    App->>DTCS: Create("service_name", udp_port)
-    App->>DTCS: async_connect_via_discovery(handler)
-    DTCS->>UDC: Create UdpDiscoveryClient
-    UDC->>Net: Broadcast "service_name"
-    
-    Net->>UDS: Discovery request
-    UDS->>DTS: Lookup "service_name"
-    DTS->>UDS: Return TCP port
-    UDS->>Net: Reply with TCP port
-    
-    Net->>UDC: Receive TCP port + IP
-    UDC->>DTCS: Received port
-    DTCS->>DTS: TCP connect to discovered port
-    DTS->>DTCS: Accept connection
-    DTCS->>App: Call handler(success)
-```
+Low-level UDP discovery components are available in `eestv/net/discovery/`:
 
-### Network Communication
+- **`UdpDiscoveryServer`**: Listens for UDP discovery requests and responds with service information
+- **`UdpDiscoveryClient`**: Sends UDP discovery requests to find services on the network
+- **`Discoverable`**: Interface for services that can be discovered
 
-```mermaid
-graph LR
-    subgraph "Server Machine: 192.168.1.10"
-        S[DiscoverableTcpSocket<br/>'my_service']
-        UDP_S[UDP Server<br/>Port 12345]
-        TCP_S[TCP Server<br/>Port 54321<br/>auto-assigned]
-    end
-    
-    subgraph "Client Machine: 192.168.1.20"
-        C[DiscoveringTcpSocket<br/>'my_service']
-        UDP_C[UDP Client<br/>Port 12345]
-    end
-    
-    UDP_C -->|"1. Broadcast: 'my_service'?"| UDP_S
-    UDP_S -->|"2. Reply: '54321'"| UDP_C
-    C -->|"3. TCP Connect to<br/>192.168.1.10:54321"| TCP_S
-    
-    style S fill:#ffcccc
-    style C fill:#ccccff
-    style UDP_S fill:#ffffcc
-    style UDP_C fill:#ffffcc
-    style TCP_S fill:#ccffcc
-```
+These components allow you to implement service discovery patterns where servers advertise themselves via UDP and clients can find them without knowing IP addresses or ports in advance.
 
 ## Usage
 
-### Server
+### Using ClientConnection
 
 ```cpp
 boost::asio::io_context io_context;
 
-// Create discoverable server (tcp_port=0 for auto-assign)
-DiscoverableTcpSocket server(io_context, "my_service", 12345, 0);
-server.start();
+// Create client connection to a remote endpoint
+auto connection = std::make_shared<eestv::net::ClientConnection>(
+    io_context,
+    boost::asio::ip::tcp::endpoint(
+        boost::asio::ip::address::from_string("192.168.1.100"), 
+        8080
+    )
+);
 
-// Accept connections
-boost::asio::ip::tcp::socket socket(io_context);
-server.async_accept(socket, [](boost::system::error_code ec) {
-    // Handle connection
+// Set connection lost callback
+connection->set_connection_lost_callback([](const boost::system::error_code& ec) {
+    std::cout << "Connection lost: " << ec.message() << std::endl;
 });
+
+// Connect (will auto-reconnect on failure)
+connection->connect();
 
 io_context.run();
 ```
 
-### Client
+### Using ServerConnection
 
 ```cpp
-boost::asio::io_context io_context;
-
-// Create discovering client
-DiscoveringTcpSocket client(io_context, "my_service", 12345);
-
-// Discover and connect
-client.async_connect_via_discovery([](boost::system::error_code ec) {
+// Accept a connection on the server side
+acceptor.async_accept([](boost::system::error_code ec, boost::asio::ip::tcp::socket socket) {
     if (!ec) {
-        // Connected - use client as regular TCP socket
+        auto connection = std::make_shared<eestv::net::ServerConnection>(
+            std::move(socket)
+        );
+        
+        connection->set_connection_lost_callback([](const boost::system::error_code& ec) {
+            // Connection died - clean up this connection
+        });
+        
+        connection->start_monitoring();
     }
 });
-
-io_context.run();
 ```
+
+### Using Discovery Components
+
+For service discovery, use the low-level components directly:
+
+**Server side:**
+1. Create a TCP acceptor on the desired port (0 for auto-assign)
+2. Create a `Discoverable` instance that returns the TCP port when queried
+3. Register the `Discoverable` with `UdpDiscoveryServer` and start it
+
+**Client side:**
+1. Create a `UdpDiscoveryClient` and start discovery for the desired identifier
+2. When a response with a TCP port is received, stop discovery
+3. Connect a `ClientConnection` to the discovered endpoint
 
 ## Key Points
 
-- **Service Identifier**: Both server and client must use the same identifier string (case-sensitive)
-- **UDP Port**: Both must use the same UDP discovery port (fixed, known in advance)
-- **TCP Port**: Server can use `0` for automatic assignment by OS
-- **Retry**: Client automatically retries discovery until successful
-- **Thread-Safe**: Uses Boost.Asio's io_context for thread safety
+- **Connection Monitoring**: Both client and server connections support keepalive monitoring
+- **Custom Keep-Alive**: Use `set_keep_alive_callback()` to define protocol-specific keep-alive messages
+- **Auto-Reconnect**: `ClientConnection` automatically reconnects with exponential backoff
+- **Callbacks**: Use connection-lost callbacks to handle disconnection events
+- **Service Discovery**: Use the low-level discovery components to build custom discovery patterns
+- **Thread-Safe**: All components use Boost.Asio's io_context for thread safety
+
+## Custom Keep-Alive Messages
+
+By default, connections do not send keep-alive messages. To enable keep-alive functionality with protocol-specific messages, set a keep-alive callback:
+
+```cpp
+connection->set_keep_alive_callback(
+    []() -> std::pair<bool, std::vector<char>>
+    {
+        // Return {true, data} to send keep-alive data
+        // Return {false, {}} to skip this keep-alive cycle
+        
+        std::string keep_alive_msg = "MY_PROTOCOL_PING\n";
+        std::vector<char> data(keep_alive_msg.begin(), keep_alive_msg.end());
+        return {true, data};
+    });
+```
+
+The callback is invoked periodically based on the keep-alive interval (default: 5 seconds). The callback should return:
+- **First value (bool)**: Whether to send a keep-alive message in this cycle
+- **Second value (vector<char>)**: The data to send if the first value is `true`
+
+This design allows protocols to be built on top of the connection layer without hardcoding specific keep-alive formats.

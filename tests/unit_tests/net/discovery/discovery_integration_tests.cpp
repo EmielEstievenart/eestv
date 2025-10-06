@@ -1,16 +1,17 @@
 #include "eestv/net/discovery/discoverable.hpp"
 #include "eestv/net/discovery/udp_discovery_client.hpp"
 #include "eestv/net/discovery/udp_discovery_server.hpp"
+#include <atomic>
 #include <boost/asio.hpp>
 #include <chrono>
 #include <gtest/gtest.h>
 #include <string>
 #include <thread>
-#include <atomic>
+#include <vector>
 
 namespace
 {
-const int test_port                    = 54322; // Different port from existing tests
+const int test_port                    = 54322;
 const std::string test_service1        = "database_service";
 const std::string test_service2        = "api_service";
 const std::string test_reply1          = "127.0.0.1:5432";
@@ -18,12 +19,14 @@ const std::string test_reply2          = "127.0.0.1:8080";
 const std::string non_existent_service = "missing_service";
 } // namespace
 
+/**
+ * Integration tests for UDP discovery system - tests realistic multi-component scenarios
+ */
 class DiscoveryIntegrationTest : public ::testing::Test
 {
 protected:
     void SetUp() override
     {
-        // Server will be created in individual tests as needed
         io_thread = std::thread(
             [this]()
             {
@@ -57,19 +60,14 @@ protected:
         io_context.restart();
     }
 
-protected:
     boost::asio::io_context io_context;
     std::unique_ptr<UdpDiscoveryServer> server;
     std::unique_ptr<UdpDiscoveryClient> client;
     std::thread io_thread;
 };
 
-/**
- * Tests basic discovery flow: server with one service, client finds it
- */
 TEST_F(DiscoveryIntegrationTest, SingleServiceDiscovery)
 {
-    // Setup server with one discoverable service
     Discoverable service(test_service1, []() { return test_reply1; });
     server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
     server->add_discoverable(service);
@@ -77,7 +75,6 @@ TEST_F(DiscoveryIntegrationTest, SingleServiceDiscovery)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    // Setup client to discover the service
     std::atomic<bool> found {false};
     std::string received_reply;
 
@@ -92,7 +89,6 @@ TEST_F(DiscoveryIntegrationTest, SingleServiceDiscovery)
 
     client->start();
 
-    // Wait for discovery to complete
     auto start_time = std::chrono::steady_clock::now();
     while (!found && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(2))
     {
@@ -103,12 +99,8 @@ TEST_F(DiscoveryIntegrationTest, SingleServiceDiscovery)
     EXPECT_EQ(received_reply, test_reply1);
 }
 
-/**
- * Tests server with multiple services, client discovers the correct one
- */
 TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
 {
-    // Setup server with multiple discoverable services
     Discoverable service1(test_service1, []() { return test_reply1; });
     Discoverable service2(test_service2, []() { return test_reply2; });
 
@@ -119,7 +111,7 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    // Test discovery of first service
+    // Discover first service
     {
         std::atomic<bool> found {false};
         std::string received_reply;
@@ -148,7 +140,7 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
         client.reset();
     }
 
-    // Test discovery of second service
+    // Discover second service
     {
         std::atomic<bool> found {false};
         std::string received_reply;
@@ -175,12 +167,8 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
     }
 }
 
-/**
- * Tests client behavior when service does not exist
- */
 TEST_F(DiscoveryIntegrationTest, NonexistentServiceNoResponse)
 {
-    // Setup server with one service
     Discoverable service(test_service1, []() { return test_reply1; });
     server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
     server->add_discoverable(service);
@@ -188,33 +176,24 @@ TEST_F(DiscoveryIntegrationTest, NonexistentServiceNoResponse)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    // Try to discover a nonexistent service
     std::atomic<bool> found {false};
-    std::atomic<int> retry_count {0};
 
     client = std::make_unique<UdpDiscoveryClient>(io_context, non_existent_service, std::chrono::milliseconds(300), test_port,
-                                                  [&found, &retry_count](const std::string&, const boost::asio::ip::udp::endpoint&)
+                                                  [&found](const std::string&, const boost::asio::ip::udp::endpoint&)
                                                   {
                                                       found = true;
-                                                      retry_count++;
                                                       return true;
                                                   });
 
     client->start();
 
-    // Wait for a reasonable time to verify no response
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     EXPECT_FALSE(found) << "Unexpectedly received response for nonexistent service";
-    EXPECT_EQ(retry_count, 0) << "Handler should not be called for nonexistent service";
 }
 
-/**
- * Tests dynamic callback - reply changes based on state
- */
 TEST_F(DiscoveryIntegrationTest, DynamicCallbackReply)
 {
-    // Use a counter to generate dynamic replies
     int call_count = 0;
     Discoverable service(test_service1, [&call_count]() { return "reply_" + std::to_string(++call_count); });
 
@@ -253,7 +232,7 @@ TEST_F(DiscoveryIntegrationTest, DynamicCallbackReply)
         client.reset();
     }
 
-    // Second discovery should get a different reply
+    // Second discovery should get incremented reply
     {
         std::atomic<bool> found {false};
         std::string received_reply;
@@ -280,16 +259,11 @@ TEST_F(DiscoveryIntegrationTest, DynamicCallbackReply)
     }
 }
 
-/**
- * Tests client retry mechanism
- */
 TEST_F(DiscoveryIntegrationTest, ClientRetryMechanism)
 {
-    // Start server with a delay
     std::thread delayed_server_thread(
         [this]()
         {
-            // Wait before starting server
             std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
             Discoverable service(test_service1, []() { return test_reply1; });
@@ -298,7 +272,6 @@ TEST_F(DiscoveryIntegrationTest, ClientRetryMechanism)
             server->start();
         });
 
-    // Start client immediately (server not ready yet)
     std::atomic<bool> found {false};
     std::string received_reply;
 
@@ -313,7 +286,6 @@ TEST_F(DiscoveryIntegrationTest, ClientRetryMechanism)
 
     client->start();
 
-    // Wait for discovery to complete (should retry and eventually find the service)
     auto start_time = std::chrono::steady_clock::now();
     while (!found && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(3))
     {
@@ -326,12 +298,8 @@ TEST_F(DiscoveryIntegrationTest, ClientRetryMechanism)
     EXPECT_EQ(received_reply, test_reply1);
 }
 
-/**
- * Tests server handling multiple concurrent requests
- */
 TEST_F(DiscoveryIntegrationTest, ConcurrentClientRequests)
 {
-    // Setup server
     Discoverable service(test_service1, []() { return test_reply1; });
     server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
     server->add_discoverable(service);
@@ -339,7 +307,6 @@ TEST_F(DiscoveryIntegrationTest, ConcurrentClientRequests)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    // Create multiple clients simultaneously
     const int num_clients = 5;
     std::vector<std::atomic<bool>> results(num_clients);
     std::vector<std::string> replies(num_clients);
@@ -371,7 +338,6 @@ TEST_F(DiscoveryIntegrationTest, ConcurrentClientRequests)
             });
     }
 
-    // Wait for all clients to complete
     auto start_time = std::chrono::steady_clock::now();
     bool all_found  = false;
     while (!all_found && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(3))
@@ -388,7 +354,6 @@ TEST_F(DiscoveryIntegrationTest, ConcurrentClientRequests)
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
-    // Stop all clients
     for (int i = 0; i < num_clients; ++i)
     {
         if (clients[i])
@@ -406,7 +371,6 @@ TEST_F(DiscoveryIntegrationTest, ConcurrentClientRequests)
         }
     }
 
-    // Verify all clients received responses
     for (int i = 0; i < num_clients; ++i)
     {
         EXPECT_TRUE(results[i]) << "Client " << i << " did not receive response";
