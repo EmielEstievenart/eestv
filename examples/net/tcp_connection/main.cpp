@@ -1,5 +1,5 @@
-#include "eestv/net/tcp_client_connection.hpp"
-#include "eestv/net/tcp_server.hpp"
+#include "eestv/net/connection/tcp_client_connection.hpp"
+#include "eestv/net/connection/tcp_server.hpp"
 #include "eestv/logging/eestv_logging.hpp"
 #include <boost/asio.hpp>
 #include <iostream>
