@@ -54,12 +54,22 @@ class LinearBufferAdapter
 public:
     explicit LinearBufferAdapter(LinearBuffer& buffer) : _buffer(buffer) { }
 
-    bool write(const void* data, std::size_t size) { return _buffer.push(data, size); }
+    bool write(const void* data, std::size_t size)
+    {
+        std::size_t writable;
+        std::uint8_t* write_head = _buffer.get_write_head(writable);
+        if (write_head == nullptr || writable < size || data == nullptr || size == 0)
+        {
+            return false;
+        }
+        std::memcpy(write_head, data, size);
+        return _buffer.commit(size);
+    }
 
     bool read(void* data, std::size_t size)
     {
         std::size_t available;
-        const void* ptr = _buffer.peek(available);
+        const std::uint8_t* ptr = _buffer.get_read_head(available);
 
         if (available < size)
         {
@@ -70,9 +80,19 @@ public:
         return _buffer.consume(size);
     }
 
-    std::size_t available_space() const { return _buffer.available_space(); }
+    std::size_t available_space() const
+    {
+        std::size_t write_size;
+        _buffer.get_write_head(write_size);
+        return write_size;
+    }
 
-    std::size_t available_data() const { return _buffer.available_data(); }
+    std::size_t available_data() const
+    {
+        std::size_t read_size;
+        _buffer.get_read_head(read_size);
+        return read_size;
+    }
 
 private:
     LinearBuffer& _buffer;
@@ -117,7 +137,7 @@ TEST_F(SerializationTest, SerializePrimitiveTypes)
     // Verify bytes were written
     std::size_t expected_size = sizeof(u8) + sizeof(u16) + sizeof(u32) + sizeof(u64) + sizeof(i8) + sizeof(i16) + sizeof(i32) + sizeof(i64);
     EXPECT_EQ(ser.bytes_written(), expected_size);
-    EXPECT_EQ(buffer->available_data(), expected_size);
+    EXPECT_EQ(adapter->available_data(), expected_size);
 }
 
 // Test deserialization of primitive types
@@ -151,7 +171,7 @@ TEST_F(SerializationTest, DeserializePrimitiveTypes)
     }
 
     // Buffer should be empty after deserialization
-    EXPECT_EQ(buffer->available_data(), 0);
+    EXPECT_EQ(adapter->available_data(), 0);
 }
 
 // Test serialization and deserialization of bool
