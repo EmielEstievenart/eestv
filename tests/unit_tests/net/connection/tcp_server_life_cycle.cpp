@@ -99,13 +99,6 @@ TEST_F(TcpServerLifeCycleTest, CreateStartAndDestroyServerStopCallback)
 
     std::atomic<bool> stopped {false};
 
-    server->set_stopped_callback(
-        [&stopped](TcpServer<>* server)
-        {
-            std::cout << "Server has stopped callback invoked\n";
-            stopped = false;
-        });
-
     // Start the server
     server->async_start();
 
@@ -120,7 +113,12 @@ TEST_F(TcpServerLifeCycleTest, CreateStartAndDestroyServerStopCallback)
     EXPECT_GT(port, 0);
 
     // Stop the server
-    server->async_stop();
+    server->async_stop(
+        [&stopped]()
+        {
+            std::cout << "Server has stopped callback invoked\n";
+            stopped = false;
+        });
 
     // Give the server a short time to process the stop; poll is_running() a few times
     for (int i = 0; i < 10 && !stopped; ++i)

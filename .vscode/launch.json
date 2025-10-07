@@ -31,7 +31,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/out/build/windows-msvc-debug/tests/unit_tests/unit_tests.exe",
             "args": [
-                "--gtest_filter=TcpServerLifeCycleTest.CreateStartAndDestroyServerStopCallback"
+                "--gtest_filter=TcpConnectionTest.ClientToServerDataTransfer"
             ],
             "stopAtEntry": true,
             "cwd": "${workspaceFolder}/out/build/windows-msvc-debug",

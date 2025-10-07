@@ -1,6 +1,7 @@
 #include "eestv/net/connection/tcp_client_connection.hpp"
 #include "eestv/net/connection/tcp_server_connection.hpp"
 #include "eestv/net/connection/tcp_server.hpp"
+#include "io_context_debugger.hpp"
 #include <boost/asio.hpp>
 #include <gtest/gtest.h>
 #include <chrono>
@@ -26,13 +27,37 @@ protected:
 
     void TearDown() override
     {
+        std::cout << "[TearDown] Starting cleanup..." << std::endl;
+
         // Stop io_context and wait for thread to finish
+        test::IoContextDebugger::print_state(*io_context, "Before work_guard reset");
+
         work_guard.reset();
+
+        test::IoContextDebugger::print_state(*io_context, "After work_guard reset");
+
+        // Wait for io_context to become idle (with timeout)
+        std::cout << "[TearDown] Waiting for io_context to become idle..." << std::endl;
+        bool idle = test::IoContextDebugger::wait_for_idle(*io_context, std::chrono::seconds(2));
+
+        if (!idle)
+        {
+            std::cout << "[TearDown] WARNING: io_context did not become idle within timeout!" << std::endl;
+            test::IoContextDebugger::force_stop_with_diagnostics(*io_context);
+        }
+        else
+        {
+            std::cout << "[TearDown] io_context became idle naturally" << std::endl;
+        }
+
         io_context->stop();
+
+        std::cout << "[TearDown] Joining io_thread..." << std::endl;
         if (io_thread.joinable())
         {
             io_thread.join();
         }
+        std::cout << "[TearDown] Cleanup complete" << std::endl;
     }
 
     // Helper to write data to a buffer
@@ -62,6 +87,24 @@ protected:
         return result;
     }
 
+    static bool stop_server(TcpServer<>* server)
+    {
+        std::atomic<bool> stopped {false};
+        server->async_stop(
+            [&stopped]()
+            {
+                std::cout << "Server has stopped callback invoked\n";
+                stopped = true;
+            });
+
+        for (int i = 0; i < 10 && !stopped; ++i)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        return stopped;
+    }
+
     std::unique_ptr<boost::asio::io_context> io_context;
     std::unique_ptr<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> work_guard;
     std::thread io_thread;
@@ -84,7 +127,7 @@ TEST_F(TcpConnectionTest, BasicServerClientConnection)
         [&](std::shared_ptr<TcpServerConnection<>> connection)
         {
             server_connection = connection;
-            connection->start_monitoring();
+            connection->start_alive_monitoring();
             server_connected = true;
         });
 
@@ -113,6 +156,8 @@ TEST_F(TcpConnectionTest, BasicServerClientConnection)
     EXPECT_TRUE(client->is_connected());
     ASSERT_NE(server_connection, nullptr);
     EXPECT_TRUE(server_connection->is_connected());
+
+    ASSERT_TRUE(stop_server(server.get()));
 }
 
 // Test sending data from client to server
@@ -134,7 +179,7 @@ TEST_F(TcpConnectionTest, ClientToServerDataTransfer)
         [&](std::shared_ptr<TcpServerConnection<>> connection)
         {
             server_connection = connection;
-            connection->start_monitoring();
+            connection->start_alive_monitoring();
         });
 
     server->async_start();
@@ -178,6 +223,11 @@ TEST_F(TcpConnectionTest, ClientToServerDataTransfer)
 
     EXPECT_TRUE(data_received);
     EXPECT_EQ(received_data, test_message);
+
+    EXPECT_TRUE(server_connection->is_connected());
+
+    server_connection->disconnect();
+    client->disconnect();
 }
 
 // Test sending data from server to client
@@ -197,7 +247,7 @@ TEST_F(TcpConnectionTest, ServerToClientDataTransfer)
         [&](std::shared_ptr<TcpServerConnection<>> connection)
         {
             server_connection = connection;
-            connection->start_monitoring();
+            connection->start_alive_monitoring();
         });
 
     server->async_start();
@@ -261,7 +311,7 @@ TEST_F(TcpConnectionTest, BidirectionalDataTransfer)
         [&](std::shared_ptr<TcpServerConnection<>> connection)
         {
             server_connection = connection;
-            connection->start_monitoring();
+            connection->start_alive_monitoring();
         });
 
     server->async_start();
@@ -357,7 +407,7 @@ TEST_F(TcpConnectionTest, KeepAliveWithCallback)
                     return {true, std::vector<char>(keepalive_msg.begin(), keepalive_msg.end())};
                 });
 
-            connection->start_monitoring();
+            connection->start_alive_monitoring();
         });
 
     server->async_start();
@@ -439,7 +489,7 @@ TEST_F(TcpConnectionTest, DisableKeepAliveViaCallback)
         [&](std::shared_ptr<TcpServerConnection<>> connection)
         {
             server_connection = connection;
-            connection->start_monitoring();
+            connection->start_alive_monitoring();
         });
 
     server->async_start();
@@ -511,7 +561,7 @@ TEST_F(TcpConnectionTest, ConnectionLostDetection)
 
             connection->set_connection_lost_callback([&]() { server_lost = true; });
 
-            connection->start_monitoring();
+            connection->start_alive_monitoring();
         });
 
     server->async_start();
@@ -568,7 +618,7 @@ TEST_F(TcpConnectionTest, MultipleSequentialMessages)
         [&](std::shared_ptr<TcpServerConnection<>> connection)
         {
             server_connection = connection;
-            connection->start_monitoring();
+            connection->start_alive_monitoring();
         });
 
     server->async_start();
