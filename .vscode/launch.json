@@ -2,13 +2,39 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run Unit Tests",
+            "name": "Run Unit Tests (Windows Debug)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/windows_msvc_ninja_x64/tests/unit_tests/unit_tests.exe",
+            "program": "${workspaceFolder}/out/build/windows-msvc-debug/tests/unit_tests/unit_tests.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/out/build/windows_msvc_ninja_x64",
+            "cwd": "${workspaceFolder}/out/build/windows-msvc-debug",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Debug TCP Server Lifecycle Tests",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/out/build/windows-msvc-debug/tests/unit_tests/unit_tests.exe",
+            "args": [
+                "--gtest_filter=TcpServerLifeCycleTest.*"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/out/build/windows-msvc-debug",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Debug Single TCP Server Test",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/out/build/windows-msvc-debug/tests/unit_tests/unit_tests.exe",
+            "args": [
+                "--gtest_filter=TcpServerLifeCycleTest.CreateStartAndDestroyServerStopCallback"
+            ],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}/out/build/windows-msvc-debug",
             "environment": [],
             "console": "integratedTerminal"
         },
@@ -16,10 +42,10 @@
             "name": "Run Template Example",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/windows_msvc_ninja_x64/bin/templates_example.exe",
+            "program": "${workspaceFolder}/out/build/windows-msvc-debug/templates_example.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/out/build/windows_msvc_ninja_x64",
+            "cwd": "${workspaceFolder}/out/build/windows-msvc-debug",
             "environment": [],
             "console": "integratedTerminal"
         },
@@ -27,10 +53,10 @@
             "name": "Run SFINAE Example",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/windows_msvc_ninja_x64/examples/sfinae/sfinae.exe",
+            "program": "${workspaceFolder}/out/build/windows-msvc-debug/examples/sfinae/sfinae.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/out/build/windows_msvc_ninja_x64",
+            "cwd": "${workspaceFolder}/out/build/windows-msvc-debug",
             "environment": [],
             "console": "integratedTerminal"
         },
