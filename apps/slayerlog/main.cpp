@@ -172,7 +172,7 @@ std::vector<slayerlog::WatcherLineBatch> collect_watcher_batches(std::vector<Wat
 }
 
 void append_batch_to_model(const std::vector<slayerlog::WatcherLineBatch>& watcher_batches, const std::vector<std::string>& source_labels,
-                           std::mutex& model_mutex, slayerlog::LogModel& model, ftxui::ScreenInteractive& screen)
+                           slayerlog::LogModel& model, ftxui::ScreenInteractive& screen)
 {
     const auto merged_lines = slayerlog::merge_log_batch(watcher_batches, source_labels);
     SLAYERLOG_LOG_TRACE("Merging watcher batches watcher_count=" << watcher_batches.size() << " merged_lines=" << merged_lines.size());
@@ -181,10 +181,7 @@ void append_batch_to_model(const std::vector<slayerlog::WatcherLineBatch>& watch
         return;
     }
 
-    {
-        std::lock_guard lock(model_mutex);
-        model.append_lines(merged_lines);
-    }
+    model.append_lines(merged_lines);
 
     screen.PostEvent(ftxui::Event::Custom);
 }
@@ -205,38 +202,42 @@ std::thread start_watcher_thread(int poll_interval_ms, std::vector<WatchedFile>&
                     break;
                 }
 
-                std::vector<slayerlog::WatcherLineBatch> watcher_batches;
-                watcher_batches.reserve(watched_files->size());
-
-                for (auto& watched_file : *watched_files)
                 {
-                    slayerlog::WatcherLineBatch watcher_batch;
-                    try
+                    std::lock_guard lock(*model_mutex);
+                    std::vector<slayerlog::WatcherLineBatch> watcher_batches;
+                    watcher_batches.reserve(watched_files->size());
+
+                    for (auto& watched_file : *watched_files)
                     {
-                        watched_file.watcher->poll(watcher_batch);
-                    }
-                    catch (const std::exception& ex)
-                    {
-                        // Ignore transient read errors while another process is writing.
-                        SLAYERLOG_LOG_WARNING("Watcher poll threw for file=" << watched_file.file_path << " error=" << ex.what());
-                    }
-                    catch (...)
-                    {
-                        // Ignore transient read errors while another process is writing.
-                        SLAYERLOG_LOG_WARNING("Watcher poll threw for file=" << watched_file.file_path << " error=<unknown>");
+                        slayerlog::WatcherLineBatch watcher_batch;
+                        try
+                        {
+                            watched_file.watcher->poll(watcher_batch);
+                        }
+                        catch (const std::exception& ex)
+                        {
+                            // Ignore transient read errors while another process is writing.
+                            SLAYERLOG_LOG_WARNING("Watcher poll threw for file=" << watched_file.file_path << " error=" << ex.what());
+                        }
+                        catch (...)
+                        {
+                            // Ignore transient read errors while another process is writing.
+                            SLAYERLOG_LOG_WARNING("Watcher poll threw for file=" << watched_file.file_path << " error=<unknown>");
+                        }
+
+                        SLAYERLOG_LOG_TRACE("Live poll file=" << watched_file.file_path << " returned_lines=" << watcher_batch.size());
+                        watcher_batches.push_back(std::move(watcher_batch));
                     }
 
-                    SLAYERLOG_LOG_TRACE("Live poll file=" << watched_file.file_path << " returned_lines=" << watcher_batch.size());
-                    watcher_batches.push_back(std::move(watcher_batch));
+                    append_batch_to_model(watcher_batches, *source_labels, *model, *screen);
                 }
-
-                append_batch_to_model(watcher_batches, *source_labels, *model_mutex, *model, *screen);
             }
         });
 }
 
 void register_commands(slayerlog::CommandManager& command_manager, slayerlog::LogModel& model, slayerlog::LogController& controller,
-                       std::function<int()> viewport_line_count)
+                       std::function<int()> viewport_line_count,
+                       std::function<slayerlog::CommandResult(std::string_view)> open_file_command)
 {
     command_manager.register_command({"filter-in", "Show lines containing text", "filter-in <text>"},
                                      [&](std::string_view arguments)
@@ -272,6 +273,18 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
 
                                          model.reset_filters();
                                          return slayerlog::CommandResult {true, "Cleared all filters"};
+                                     });
+
+    command_manager.register_command({"open-file", "Open file and reload all tracked logs", "open-file <path>"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         const std::string file_path = trim_text(arguments);
+                                         if (file_path.empty())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: open-file <path>"};
+                                         }
+
+                                         return open_file_command(file_path);
                                      });
 
     command_manager.register_command({"go-to-line", "Center the view on a line number", "go-to-line <line-number>"},
@@ -360,13 +373,14 @@ int main(int argc, char** argv)
     slayerlog::debug_log::initialize();
     SLAYERLOG_LOG_INFO("Debug log initialized at " << slayerlog::debug_log::log_file_path().string());
 
-    const auto config        = slayerlog::parse_command_line(argc, argv);
-    const auto source_labels = build_source_labels(config.file_paths);
-    const auto header_text   = build_header_text(source_labels);
+    const auto config                           = slayerlog::parse_command_line(argc, argv);
+    std::vector<std::string> tracked_file_paths = config.file_paths;
+    auto source_labels                          = build_source_labels(tracked_file_paths);
+    std::string header_text                     = build_header_text(source_labels);
     SLAYERLOG_LOG_INFO("Starting slayerlog poll_interval_ms=" << config.poll_interval_ms << " watched_files=" << config.file_paths.size());
-    for (std::size_t index = 0; index < config.file_paths.size(); ++index)
+    for (std::size_t index = 0; index < tracked_file_paths.size(); ++index)
     {
-        SLAYERLOG_LOG_INFO("Configured watcher[" << index << "] file=" << config.file_paths[index] << " label=" << source_labels[index]);
+        SLAYERLOG_LOG_INFO("Configured watcher[" << index << "] file=" << tracked_file_paths[index] << " label=" << source_labels[index]);
     }
 
     auto screen = ftxui::ScreenInteractive::Fullscreen();
@@ -374,7 +388,7 @@ int main(int argc, char** argv)
 
     std::mutex model_mutex;
     slayerlog::LogModel model;
-    model.set_show_source_labels(config.file_paths.size() > 1);
+    model.set_show_source_labels(tracked_file_paths.size() > 1);
 
     slayerlog::SettingsStore settings_store(slayerlog::default_settings_file_path());
     slayerlog::CommandHistory command_history(settings_store);
@@ -388,14 +402,51 @@ int main(int argc, char** argv)
     slayerlog::CommandManager command_manager;
     slayerlog::LogView view;
     slayerlog::LogController controller;
-    register_commands(command_manager, model, controller, [&] { return view.visible_line_count(screen.dimy()); });
+    auto watched_files = create_file_watchers(tracked_file_paths, source_labels);
+
+    register_commands(
+        command_manager, model, controller, [&] { return view.visible_line_count(screen.dimy()); },
+        [&](std::string_view file_path)
+        {
+            std::vector<std::string> candidate_file_paths = tracked_file_paths;
+            candidate_file_paths.push_back(std::string(file_path));
+
+            auto candidate_source_labels = build_source_labels(candidate_file_paths);
+            std::string candidate_header = build_header_text(candidate_source_labels);
+            std::vector<WatchedFile> candidate_watchers;
+            std::vector<slayerlog::WatcherLineBatch> candidate_batches;
+
+            try
+            {
+                candidate_watchers = create_file_watchers(candidate_file_paths, candidate_source_labels);
+                candidate_batches  = collect_watcher_batches(candidate_watchers);
+            }
+            catch (const std::exception& ex)
+            {
+                SLAYERLOG_LOG_ERROR("open-file failed file=" << file_path << " error=" << ex.what());
+                return slayerlog::CommandResult {false, ex.what()};
+            }
+
+            tracked_file_paths = std::move(candidate_file_paths);
+            source_labels      = std::move(candidate_source_labels);
+            header_text        = std::move(candidate_header);
+            watched_files      = std::move(candidate_watchers);
+
+            model.reset();
+            controller.reset();
+            model.set_show_source_labels(tracked_file_paths.size() > 1);
+            append_batch_to_model(candidate_batches, source_labels, model, screen);
+
+            return slayerlog::CommandResult {true, "Opened file: " + std::string(file_path)};
+        });
+
     slayerlog::CommandPaletteController command_palette_controller(command_palette_model, command_manager, command_history);
     slayerlog::InputController input_controller(model, controller, view, screen, command_palette_controller);
 
-    auto watched_files = create_file_watchers(config.file_paths, source_labels);
     try
     {
-        append_batch_to_model(collect_watcher_batches(watched_files), source_labels, model_mutex, model, screen);
+        std::lock_guard lock(model_mutex);
+        append_batch_to_model(collect_watcher_batches(watched_files), source_labels, model, screen);
     }
     catch (const std::exception& ex)
     {
