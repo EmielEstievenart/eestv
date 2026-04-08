@@ -4,13 +4,22 @@
 #include <algorithm>
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <utility>
+
+#include <ftxui/screen/string.hpp>
 
 namespace slayerlog
 {
 
 namespace
 {
+
+struct RenderedColumnRange
+{
+    int start = 0;
+    int end   = 0;
+};
 
 // Approximate viewport size for the first render before FTXUI's reflect() has measured
 // the actual box. Breakdown: window border (2) + header (1) + separators (2) + status lines (3).
@@ -46,7 +55,8 @@ ftxui::Element build_filter_status(const LogModel& model)
     ftxui::Elements parts;
     parts.push_back(theme::badge("FILTER", theme::label_filter_fg));
 
-    const auto hidden_before = model.hidden_before_line_number();
+    const auto hidden_before  = model.hidden_before_line_number();
+    const auto hidden_columns = model.hidden_columns();
 
     if (model.include_filters().empty() && model.exclude_filters().empty())
     {
@@ -55,6 +65,14 @@ ftxui::Element build_filter_status(const LogModel& model)
         {
             parts.push_back(ftxui::text(" | before line " + std::to_string(*hidden_before)) | ftxui::color(theme::muted));
         }
+
+        if (hidden_columns.has_value())
+        {
+            parts.push_back(ftxui::text(" | columns " + std::to_string(hidden_columns->first_column) + "-" +
+                                        std::to_string(hidden_columns->last_column)) |
+                            ftxui::color(theme::muted));
+        }
+
         return ftxui::hbox(std::move(parts));
     }
 
@@ -73,7 +91,160 @@ ftxui::Element build_filter_status(const LogModel& model)
         parts.push_back(ftxui::text(" | before line " + std::to_string(*hidden_before)) | ftxui::color(theme::muted));
     }
 
+    if (hidden_columns.has_value())
+    {
+        parts.push_back(
+            ftxui::text(" | columns " + std::to_string(hidden_columns->first_column) + "-" + std::to_string(hidden_columns->last_column)) |
+            ftxui::color(theme::muted));
+    }
+
     return ftxui::hbox(std::move(parts));
+}
+
+std::optional<RenderedColumnRange> preview_range_for_line(const std::string& rendered_line, int rendered_text_start_column,
+                                                          const std::optional<HiddenColumnRange>& hide_columns_preview)
+{
+    if (!hide_columns_preview.has_value())
+    {
+        return std::nullopt;
+    }
+
+    const int highlight_start = rendered_text_start_column + hide_columns_preview->first_column - 1;
+    const int highlight_end   = rendered_text_start_column + hide_columns_preview->last_column;
+    const int clamped_start   = std::clamp(highlight_start, 0, static_cast<int>(rendered_line.size()));
+    const int clamped_end     = std::clamp(highlight_end, clamped_start, static_cast<int>(rendered_line.size()));
+    if (clamped_start >= clamped_end)
+    {
+        return std::nullopt;
+    }
+
+    return RenderedColumnRange {
+        clamped_start,
+        clamped_end,
+    };
+}
+
+std::optional<RenderedColumnRange> selection_range_for_line(const std::string& rendered_line, int line_index,
+                                                            const std::optional<std::pair<TextPosition, TextPosition>>& selected_range)
+{
+    if (!selected_range.has_value() || line_index < selected_range->first.line || line_index > selected_range->second.line)
+    {
+        return std::nullopt;
+    }
+
+    const int highlight_start = (line_index == selected_range->first.line) ? selected_range->first.column : 0;
+    const int highlight_end =
+        (line_index == selected_range->second.line) ? selected_range->second.column : static_cast<int>(rendered_line.size());
+    const int clamped_start = std::clamp(highlight_start, 0, static_cast<int>(rendered_line.size()));
+    const int clamped_end   = std::clamp(highlight_end, clamped_start, static_cast<int>(rendered_line.size()));
+    if (clamped_start >= clamped_end)
+    {
+        return std::nullopt;
+    }
+
+    return RenderedColumnRange {
+        clamped_start,
+        clamped_end,
+    };
+}
+
+ftxui::Element render_line_with_ranges(const std::string& rendered_line, const std::optional<RenderedColumnRange>& preview_range,
+                                       const std::optional<RenderedColumnRange>& selection_range)
+{
+    if (!preview_range.has_value() && !selection_range.has_value())
+    {
+        return ftxui::text(rendered_line);
+    }
+
+    std::vector<int> boundaries;
+    boundaries.reserve(6);
+    boundaries.push_back(0);
+    boundaries.push_back(static_cast<int>(rendered_line.size()));
+    if (preview_range.has_value())
+    {
+        boundaries.push_back(preview_range->start);
+        boundaries.push_back(preview_range->end);
+    }
+    if (selection_range.has_value())
+    {
+        boundaries.push_back(selection_range->start);
+        boundaries.push_back(selection_range->end);
+    }
+
+    std::sort(boundaries.begin(), boundaries.end());
+    boundaries.erase(std::unique(boundaries.begin(), boundaries.end()), boundaries.end());
+
+    ftxui::Elements row;
+    row.reserve(boundaries.size());
+
+    for (std::size_t i = 0; i + 1 < boundaries.size(); ++i)
+    {
+        const int segment_start = boundaries[i];
+        const int segment_end   = boundaries[i + 1];
+        if (segment_start >= segment_end)
+        {
+            continue;
+        }
+
+        auto segment = ftxui::text(
+            rendered_line.substr(static_cast<std::size_t>(segment_start), static_cast<std::size_t>(segment_end - segment_start)));
+
+        const bool preview_active = preview_range.has_value() && segment_start < preview_range->end && segment_end > preview_range->start;
+        const bool selection_active =
+            selection_range.has_value() && segment_start < selection_range->end && segment_end > selection_range->start;
+
+        if (preview_active)
+        {
+            segment |= ftxui::bgcolor(theme::hide_columns_preview_bg) | ftxui::color(theme::hide_columns_preview_fg);
+        }
+
+        if (selection_active)
+        {
+            segment |= ftxui::inverted;
+        }
+
+        row.push_back(std::move(segment));
+    }
+
+    return ftxui::hbox(std::move(row));
+}
+
+int byte_index_for_cell_column(const std::string& text, int cell_column)
+{
+    const int max_cells        = ftxui::string_width(text);
+    const int clamped_cell_col = std::clamp(cell_column, 0, max_cells);
+    if (clamped_cell_col == 0)
+    {
+        return 0;
+    }
+
+    auto next_codepoint_end = [&](std::size_t start)
+    {
+        std::size_t end = std::min(start + 1, text.size());
+        while (end < text.size() && (static_cast<unsigned char>(text[end]) & 0xC0U) == 0x80U)
+        {
+            ++end;
+        }
+
+        return end;
+    };
+
+    std::size_t best_byte_index = 0;
+    std::size_t index           = 0;
+    while (index < text.size())
+    {
+        const std::size_t next_index = next_codepoint_end(index);
+        const int prefix_width       = ftxui::string_width(std::string_view(text.data(), next_index));
+        if (prefix_width > clamped_cell_col)
+        {
+            break;
+        }
+
+        best_byte_index = next_index;
+        index           = next_index;
+    }
+
+    return static_cast<int>(best_byte_index);
 }
 
 ftxui::Element build_find_status(const LogModel& model, const LogController& controller)
@@ -121,7 +292,8 @@ ftxui::Element build_key_hints()
 
 } // namespace
 
-ftxui::Element LogView::render(const LogModel& model, const LogController& controller, const std::string& header_text, int screen_height)
+ftxui::Element LogView::render(const LogModel& model, const LogController& controller, const std::string& header_text, int screen_height,
+                               std::optional<HiddenColumnRange> hide_columns_preview)
 {
     const int visible_line_count = estimate_visible_line_count(_viewport_box, screen_height);
     const int first_visible_line = controller.first_visible_line_index(model, visible_line_count).value;
@@ -139,6 +311,7 @@ ftxui::Element LogView::render(const LogModel& model, const LogController& contr
     else
     {
         const auto selected_range    = controller.selection_bounds(model);
+        const auto effective_preview = selected_range.has_value() ? std::optional<HiddenColumnRange>() : hide_columns_preview;
         const auto active_find_index = controller.active_find_visible_index(model);
         const auto rendered_lines    = model.rendered_lines(first_visible_line, visible_line_count);
 
@@ -149,45 +322,15 @@ ftxui::Element LogView::render(const LogModel& model, const LogController& contr
             const bool is_active_match = active_find_index.has_value() && active_find_index->value == index;
             const auto& rendered_line  = rendered_lines[offset];
 
-            if (!selected_range.has_value() || index < selected_range->first.line || index > selected_range->second.line)
-            {
-                auto row = ftxui::text(rendered_line);
-                if (is_find_match)
-                {
-                    row = theme::apply_find_highlight(std::move(row), is_active_match);
-                }
-                content.push_back(std::move(row));
-                continue;
-            }
-
-            const int highlight_start = (index == selected_range->first.line) ? selected_range->first.column : 0;
-            const int highlight_end =
-                (index == selected_range->second.line) ? selected_range->second.column : static_cast<int>(rendered_line.size());
-            const int clamped_start = std::clamp(highlight_start, 0, static_cast<int>(rendered_line.size()));
-            const int clamped_end   = std::clamp(highlight_end, clamped_start, static_cast<int>(rendered_line.size()));
-
-            ftxui::Elements row;
-            if (clamped_start > 0)
-            {
-                row.push_back(ftxui::text(rendered_line.substr(0, static_cast<std::size_t>(clamped_start))));
-            }
-
-            row.push_back(ftxui::text(rendered_line.substr(static_cast<std::size_t>(clamped_start),
-                                                           static_cast<std::size_t>(clamped_end - clamped_start))) |
-                          ftxui::inverted);
-
-            if (clamped_end < static_cast<int>(rendered_line.size()))
-            {
-                row.push_back(ftxui::text(rendered_line.substr(static_cast<std::size_t>(clamped_end))));
-            }
-
-            auto selection_row = ftxui::hbox(std::move(row));
+            const auto preview_range   = preview_range_for_line(rendered_line, model.rendered_text_start_column(index), effective_preview);
+            const auto selection_range = selection_range_for_line(rendered_line, index, selected_range);
+            auto styled_row            = render_line_with_ranges(rendered_line, preview_range, selection_range);
             if (is_find_match)
             {
-                selection_row = theme::apply_find_highlight(std::move(selection_row), is_active_match);
+                styled_row = theme::apply_find_highlight(std::move(styled_row), is_active_match);
             }
 
-            content.push_back(std::move(selection_row));
+            content.push_back(std::move(styled_row));
         }
     }
 
@@ -270,10 +413,11 @@ std::optional<TextPosition> LogView::mouse_to_text_position(const LogModel& mode
         return std::nullopt;
     }
 
-    const auto line = model.rendered_line(line_index);
+    const auto line        = model.rendered_line(line_index);
+    const int mouse_column = mouse.x - _viewport_box.x_min;
     return TextPosition {
         line_index,
-        std::clamp(mouse.x - _viewport_box.x_min, 0, static_cast<int>(line.size())),
+        byte_index_for_cell_column(line, mouse_column),
     };
 }
 

@@ -91,6 +91,33 @@ std::optional<int> parse_positive_line_number(std::string_view text)
     return line_number;
 }
 
+std::optional<int> parse_non_negative_number(std::string_view text)
+{
+    if (text.empty())
+    {
+        return std::nullopt;
+    }
+
+    const std::string value_text(text);
+    std::size_t parsed_length = 0;
+    int value                 = 0;
+    try
+    {
+        value = std::stoi(value_text, &parsed_length);
+    }
+    catch (const std::exception&)
+    {
+        return std::nullopt;
+    }
+
+    if (parsed_length != value_text.size() || value < 0)
+    {
+        return std::nullopt;
+    }
+
+    return value;
+}
+
 std::string trim_text(std::string_view text)
 {
     std::size_t start = 0;
@@ -106,6 +133,38 @@ std::string trim_text(std::string_view text)
     }
 
     return std::string(text.substr(start, end - start));
+}
+
+std::optional<slayerlog::HiddenColumnRange> parse_hidden_column_range(std::string_view text)
+{
+    const std::string range_text = trim_text(text);
+    if (range_text.empty())
+    {
+        return std::nullopt;
+    }
+
+    const std::size_t separator_index = range_text.find('-');
+    if (separator_index == std::string::npos || separator_index == 0 || separator_index == range_text.size() - 1)
+    {
+        return std::nullopt;
+    }
+
+    if (range_text.find('-', separator_index + 1) != std::string::npos)
+    {
+        return std::nullopt;
+    }
+
+    const auto first_column = parse_non_negative_number(trim_text(range_text.substr(0, separator_index)));
+    const auto last_column  = parse_non_negative_number(trim_text(range_text.substr(separator_index + 1)));
+    if (!first_column.has_value() || !last_column.has_value())
+    {
+        return std::nullopt;
+    }
+
+    return slayerlog::HiddenColumnRange {
+        *first_column,
+        *last_column,
+    };
 }
 
 std::vector<slayerlog::LogSource> parse_log_sources(const std::vector<std::string>& specs)
@@ -409,6 +468,51 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                              true,
                                              "Hidden all lines before line " + std::to_string(*line_number),
                                          };
+                                     });
+
+    command_manager.register_command({"hide-columns", "Hide raw text columns in the visible log", "hide-columns <start-end>"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         const auto column_range = parse_hidden_column_range(arguments);
+                                         if (!column_range.has_value())
+                                         {
+                                             return slayerlog::CommandResult {
+                                                 false,
+                                                 "Usage: hide-columns <start-end> (example: 20-80, 0-0 resets)",
+                                             };
+                                         }
+
+                                         try
+                                         {
+                                             model.hide_columns(column_range->first_column, column_range->last_column);
+                                         }
+                                         catch (const std::invalid_argument& error)
+                                         {
+                                             return slayerlog::CommandResult {false, error.what()};
+                                         }
+
+                                         if (column_range->first_column == 0 && column_range->last_column == 0)
+                                         {
+                                             return slayerlog::CommandResult {true, "Showing all columns"};
+                                         }
+
+                                         return slayerlog::CommandResult {
+                                             true,
+                                             "Hidden columns " + std::to_string(column_range->first_column) + "-" +
+                                                 std::to_string(column_range->last_column),
+                                         };
+                                     });
+
+    command_manager.register_command({"show-all-columns", "Clear hidden raw text columns", "show-all-columns"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (!trim_text(arguments).empty())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: show-all-columns"};
+                                         }
+
+                                         model.reset_hidden_columns();
+                                         return slayerlog::CommandResult {true, "Showing all columns"};
                                      });
 
     command_manager.register_command({"find", "Find lines matching text or regex", "find <text|re:regex>"},

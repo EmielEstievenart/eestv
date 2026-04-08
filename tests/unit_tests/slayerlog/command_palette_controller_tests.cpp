@@ -247,6 +247,41 @@ TEST(CommandPaletteControllerTest, ReturnExecutesRawQueryWhenNoMatchingCommands)
     EXPECT_EQ(controller.model().status_message, "Unknown command: missing-command");
 }
 
+TEST(CommandPaletteControllerTest, HideColumnsQueryBuildsPreviewRange)
+{
+    CommandManager manager;
+    manager.register_command({"hide-columns", "Hide columns", "hide-columns <start-end>"},
+                             [](std::string_view) { return CommandResult {true, "ok"}; });
+
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+    controller.open();
+
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Character("hide-columns 20-80")));
+    ASSERT_TRUE(controller.model().hide_columns_preview.has_value());
+    EXPECT_EQ(*controller.model().hide_columns_preview, (HiddenColumnRange {20, 80}));
+}
+
+TEST(CommandPaletteControllerTest, HideColumnsPreviewClearsForResetOrInvalidInput)
+{
+    CommandManager manager;
+    manager.register_command({"hide-columns", "Hide columns", "hide-columns <start-end>"},
+                             [](std::string_view) { return CommandResult {true, "ok"}; });
+
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+    controller.open();
+
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Character("hide-columns 0-0")));
+    EXPECT_FALSE(controller.model().hide_columns_preview.has_value());
+
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Backspace));
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Backspace));
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Backspace));
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Character("9-3")));
+    EXPECT_FALSE(controller.model().hide_columns_preview.has_value());
+}
+
 TEST(CommandPaletteControllerTest, CtrlRTogglesHistoryMode)
 {
     const auto settings_path = make_temp_settings_path();

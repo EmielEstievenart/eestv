@@ -11,7 +11,8 @@ MasterView::MasterView(LogView& log_view, CommandPaletteView& command_palette_vi
 ftxui::Element MasterView::render(const LogModel& model, const LogController& controller, const std::string& header_text, int screen_height,
                                   const CommandPaletteModel& command_palette) const
 {
-    auto base_view = _log_view.render(model, controller, header_text, screen_height);
+    const auto hide_columns_preview = command_palette.open ? command_palette.hide_columns_preview : std::nullopt;
+    auto base_view                  = _log_view.render(model, controller, header_text, screen_height, hide_columns_preview);
     if (!command_palette.open)
     {
         return base_view;

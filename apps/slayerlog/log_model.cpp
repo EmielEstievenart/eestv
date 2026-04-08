@@ -28,6 +28,7 @@ void LogModel::reset()
     _find_pattern.reset();
 
     _hidden_before_line_number.reset();
+    _hidden_columns.reset();
 
     _updates_paused     = false;
     _show_source_labels = false;
@@ -126,6 +127,35 @@ void LogModel::hide_before_line_number(int line_number)
 std::optional<int> LogModel::hidden_before_line_number() const
 {
     return _hidden_before_line_number;
+}
+
+void LogModel::hide_columns(int first_column, int last_column)
+{
+    if (first_column == 0 && last_column == 0)
+    {
+        _hidden_columns.reset();
+        return;
+    }
+
+    if (first_column <= 0 || last_column <= 0 || first_column > last_column)
+    {
+        throw std::invalid_argument("Column range must use positive start/end with start <= end, or 0-0 to reset");
+    }
+
+    _hidden_columns = HiddenColumnRange {
+        first_column,
+        last_column,
+    };
+}
+
+void LogModel::reset_hidden_columns()
+{
+    _hidden_columns.reset();
+}
+
+std::optional<HiddenColumnRange> LogModel::hidden_columns() const
+{
+    return _hidden_columns;
 }
 
 bool LogModel::set_find_query(std::string query)
@@ -249,6 +279,26 @@ std::string LogModel::rendered_line(int index) const
     return render_entry(entry_index);
 }
 
+int LogModel::rendered_text_start_column(int index) const
+{
+    if (index < 0 || index >= static_cast<int>(_visible_entry_indices.size()))
+    {
+        return 0;
+    }
+
+    const VisibleLineIndex visible_line_index {index};
+    const AllLineIndex entry_index = _visible_entry_indices[visible_line_index];
+    const auto& entry              = _all_entries[entry_index];
+
+    int start = static_cast<int>(std::to_string(entry_index.value + 1).size()) + 1;
+    if (_show_source_labels)
+    {
+        start += static_cast<int>(entry.source_label.size()) + 3;
+    }
+
+    return start;
+}
+
 std::vector<std::string> LogModel::rendered_lines(int first_index, int count) const
 {
     if (count <= 0)
@@ -284,7 +334,15 @@ std::string LogModel::render_entry(AllLineIndex entry_index) const
         output << "[" << entry.source_label << "] ";
     }
 
-    output << entry.text;
+    if (_hidden_columns.has_value())
+    {
+        output << hide_column_range(entry.text, *_hidden_columns);
+    }
+    else
+    {
+        output << entry.text;
+    }
+
     return output.str();
 }
 
@@ -444,6 +502,28 @@ bool LogModel::matches_pattern(std::string_view haystack, const SearchPattern& p
 bool LogModel::matches_any_pattern(std::string_view haystack, const std::vector<SearchPattern>& patterns) const
 {
     return std::any_of(patterns.begin(), patterns.end(), [&](const SearchPattern& pattern) { return matches_pattern(haystack, pattern); });
+}
+
+std::string LogModel::hide_column_range(std::string_view text, HiddenColumnRange range)
+{
+    if (range.first_column <= 0 || range.last_column < range.first_column)
+    {
+        return std::string(text);
+    }
+
+    const std::size_t first_hidden_index = static_cast<std::size_t>(range.first_column - 1);
+    if (first_hidden_index >= text.size())
+    {
+        return std::string(text);
+    }
+
+    const std::size_t last_hidden_exclusive = std::min(text.size(), static_cast<std::size_t>(range.last_column));
+
+    std::string result;
+    result.reserve(text.size() - (last_hidden_exclusive - first_hidden_index));
+    result.append(text.substr(0, first_hidden_index));
+    result.append(text.substr(last_hidden_exclusive));
+    return result;
 }
 
 std::string LogModel::trim_filter_text(std::string_view text)

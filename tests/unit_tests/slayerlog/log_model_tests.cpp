@@ -89,6 +89,7 @@ TEST(LogModelTest, ResetClearsAllLoadedAndDerivedState)
     model.add_include_filter("error");
     model.add_exclude_filter("ignore");
     model.hide_before_line_number(2);
+    model.hide_columns(2, 4);
     ASSERT_TRUE(model.set_find_query("error"));
     model.toggle_pause();
     model.append_lines({
@@ -102,6 +103,7 @@ TEST(LogModelTest, ResetClearsAllLoadedAndDerivedState)
     EXPECT_TRUE(model.include_filters().empty());
     EXPECT_TRUE(model.exclude_filters().empty());
     EXPECT_FALSE(model.hidden_before_line_number().has_value());
+    EXPECT_FALSE(model.hidden_columns().has_value());
     EXPECT_FALSE(model.find_active());
     EXPECT_EQ(model.total_find_match_count(), 0);
     EXPECT_EQ(model.visible_find_match_count(), 0);
@@ -192,6 +194,56 @@ TEST(LogModelTest, HideBeforeLineUsesRawLineNumbers)
     ASSERT_TRUE(model.visible_line_index_for_line_number(3).has_value());
     EXPECT_EQ(model.visible_line_index_for_line_number(3)->value, 0);
     EXPECT_FALSE(model.visible_line_index_for_line_number(2).has_value());
+}
+
+TEST(LogModelTest, HideColumnsAppliesToRawTextOnly)
+{
+    LogModel model;
+    model.set_show_source_labels(true);
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "0123456789"},
+    });
+
+    model.hide_columns(3, 6);
+
+    EXPECT_EQ(model.rendered_line(0), "1 [alpha.log] 016789");
+    ASSERT_TRUE(model.hidden_columns().has_value());
+    EXPECT_EQ(*model.hidden_columns(), (HiddenColumnRange {3, 6}));
+}
+
+TEST(LogModelTest, HideColumnsResetAndReplacement)
+{
+    LogModel model;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "abcdefghij"},
+    });
+
+    model.hide_columns(2, 4);
+    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
+                                         "aefghij",
+                                     }));
+
+    model.hide_columns(6, 8);
+    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
+                                         "abcdeij",
+                                     }));
+
+    model.hide_columns(0, 0);
+    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
+                                         "abcdefghij",
+                                     }));
+    EXPECT_FALSE(model.hidden_columns().has_value());
+}
+
+TEST(LogModelTest, HideColumnsRejectsInvalidRanges)
+{
+    LogModel model;
+
+    EXPECT_THROW(model.hide_columns(0, 3), std::invalid_argument);
+    EXPECT_THROW(model.hide_columns(3, 0), std::invalid_argument);
+    EXPECT_THROW(model.hide_columns(-1, 3), std::invalid_argument);
+    EXPECT_THROW(model.hide_columns(7, 2), std::invalid_argument);
 }
 
 TEST(LogModelTest, FindQueryBuildsMatchIndexesAndLookupHelpers)

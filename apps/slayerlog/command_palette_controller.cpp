@@ -1,7 +1,10 @@
 #include "command_palette_controller.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
+#include <exception>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -85,6 +88,133 @@ std::pair<std::size_t, std::size_t> command_name_range(std::string_view query)
     return {command_start, command_end};
 }
 
+std::string_view trim_view(std::string_view text)
+{
+    std::size_t start = 0;
+    while (start < text.size() && std::isspace(static_cast<unsigned char>(text[start])) != 0)
+    {
+        ++start;
+    }
+
+    std::size_t end = text.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(text[end - 1])) != 0)
+    {
+        --end;
+    }
+
+    return text.substr(start, end - start);
+}
+
+std::string normalized_command_name(std::string_view name)
+{
+    std::string normalized;
+    normalized.reserve(name.size());
+    for (char ch : name)
+    {
+        normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+
+    return normalized;
+}
+
+std::optional<int> parse_non_negative_number(std::string_view text)
+{
+    const std::string number_text(trim_view(text));
+    if (number_text.empty())
+    {
+        return std::nullopt;
+    }
+
+    std::size_t parsed_length = 0;
+    int value                 = 0;
+    try
+    {
+        value = std::stoi(number_text, &parsed_length);
+    }
+    catch (const std::exception&)
+    {
+        return std::nullopt;
+    }
+
+    if (parsed_length != number_text.size() || value < 0)
+    {
+        return std::nullopt;
+    }
+
+    return value;
+}
+
+std::optional<HiddenColumnRange> parse_hide_columns_range(std::string_view text)
+{
+    const std::string_view trimmed_text = trim_view(text);
+    if (trimmed_text.empty())
+    {
+        return std::nullopt;
+    }
+
+    const std::size_t separator_index = trimmed_text.find('-');
+    if (separator_index == std::string_view::npos || separator_index == 0 || separator_index == trimmed_text.size() - 1)
+    {
+        return std::nullopt;
+    }
+
+    if (trimmed_text.find('-', separator_index + 1) != std::string_view::npos)
+    {
+        return std::nullopt;
+    }
+
+    const auto first_column = parse_non_negative_number(trimmed_text.substr(0, separator_index));
+    const auto last_column  = parse_non_negative_number(trimmed_text.substr(separator_index + 1));
+    if (!first_column.has_value() || !last_column.has_value())
+    {
+        return std::nullopt;
+    }
+
+    if ((*first_column == 0 && *last_column == 0) || (*first_column > 0 && *last_column > 0 && *first_column <= *last_column))
+    {
+        return HiddenColumnRange {
+            *first_column,
+            *last_column,
+        };
+    }
+
+    return std::nullopt;
+}
+
+std::optional<HiddenColumnRange> hide_columns_preview_from_query(std::string_view query)
+{
+    const std::string_view trimmed_query = trim_view(query);
+    if (trimmed_query.empty())
+    {
+        return std::nullopt;
+    }
+
+    const auto [command_start, command_end] = command_name_range(trimmed_query);
+    const std::string command_name          = normalized_command_name(trimmed_query.substr(command_start, command_end - command_start));
+    if (command_name != "hide-columns")
+    {
+        return std::nullopt;
+    }
+
+    if (command_end >= trimmed_query.size())
+    {
+        return std::nullopt;
+    }
+
+    const auto range = parse_hide_columns_range(trimmed_query.substr(command_end + 1));
+    if (!range.has_value())
+    {
+        return std::nullopt;
+    }
+
+    if (range->first_column == 0 && range->last_column == 0)
+    {
+        return std::nullopt;
+    }
+
+    return range;
+}
+
 } // namespace
 
 CommandPaletteController::CommandPaletteController(CommandPaletteModel& model, CommandManager& command_manager)
@@ -121,6 +251,7 @@ void CommandPaletteController::open()
     _model.selected_index              = 0;
     _model.status_message.clear();
     _model.status_is_error = false;
+    _model.hide_columns_preview.reset();
     refresh_matches();
 }
 
@@ -135,6 +266,7 @@ void CommandPaletteController::open_history()
     _model.selected_index              = 0;
     _model.status_message.clear();
     _model.status_is_error = false;
+    _model.hide_columns_preview.reset();
     refresh_matches();
 }
 
@@ -150,6 +282,7 @@ void CommandPaletteController::open_close_open_file_picker(std::vector<std::stri
     _model.selected_index              = 0;
     _model.status_message.clear();
     _model.status_is_error = false;
+    _model.hide_columns_preview.reset();
     refresh_matches();
 }
 
@@ -162,6 +295,7 @@ void CommandPaletteController::close()
     _close_open_file_selection_handler = {};
     _model.cursor_position             = 0;
     _model.selected_index              = 0;
+    _model.hide_columns_preview.reset();
     refresh_matches();
 }
 
@@ -355,6 +489,15 @@ void CommandPaletteController::refresh_matches()
     {
         _model.matching_history_entries.clear();
         _model.matching_commands.clear();
+    }
+
+    if (_model.mode == CommandPaletteMode::Commands)
+    {
+        _model.hide_columns_preview = hide_columns_preview_from_query(_model.query);
+    }
+    else
+    {
+        _model.hide_columns_preview.reset();
     }
 
     if (active_match_count() == 0)

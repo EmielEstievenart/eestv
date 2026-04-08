@@ -103,6 +103,17 @@ struct TextPosition
     int column = 0;
 };
 
+struct HiddenColumnRange
+{
+    int first_column = 0;
+    int last_column  = 0;
+};
+
+inline bool operator==(HiddenColumnRange lhs, HiddenColumnRange rhs)
+{
+    return lhs.first_column == rhs.first_column && lhs.last_column == rhs.last_column;
+}
+
 class LogModel
 {
 public:
@@ -131,6 +142,12 @@ public:
     void hide_before_line_number(int line_number);
     /** @brief Returns the active raw-line cutoff, if any. */
     std::optional<int> hidden_before_line_number() const;
+    /** @brief Hides one inclusive, 1-based raw text column range in rendered lines. */
+    void hide_columns(int first_column, int last_column);
+    /** @brief Clears any active hidden column range. */
+    void reset_hidden_columns();
+    /** @brief Returns the currently active hidden raw-text column range, if any. */
+    std::optional<HiddenColumnRange> hidden_columns() const;
 
     /** @brief Sets the active find query and rebuilds find results. */
     bool set_find_query(std::string query);
@@ -164,6 +181,8 @@ public:
 
     /** @brief Returns a fully rendered line including line number and optional source label. */
     std::string rendered_line(int index) const;
+    /** @brief Returns the rendered column where raw text starts for a visible line. */
+    int rendered_text_start_column(int index) const;
     /** @brief Returns a contiguous slice of fully rendered visible lines. */
     std::vector<std::string> rendered_lines(int first_index, int count) const;
 
@@ -192,6 +211,7 @@ private:
     bool entry_matches_filters(const ObservedLogLine& entry) const;
     bool matches_pattern(std::string_view haystack, const SearchPattern& pattern) const;
     bool matches_any_pattern(std::string_view haystack, const std::vector<SearchPattern>& patterns) const;
+    static std::string hide_column_range(std::string_view text, HiddenColumnRange range);
     static std::string trim_filter_text(std::string_view text);
 
     IndexedVector<ObservedLogLine, AllLineIndex> _all_entries;
@@ -208,6 +228,7 @@ private:
     IndexedVector<AllLineIndex, FindResultIndex> _find_match_entry_indices;
 
     std::optional<int> _hidden_before_line_number;
+    std::optional<HiddenColumnRange> _hidden_columns;
 
     bool _updates_paused     = false;
     bool _show_source_labels = false;
