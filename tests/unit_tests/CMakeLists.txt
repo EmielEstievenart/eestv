@@ -25,6 +25,7 @@ add_executable(
   slayerlog/log_timestamp_tests.cpp
   slayerlog/log_model_tests.cpp
   slayerlog/log_controller_tests.cpp
+  slayerlog/log_view_tests.cpp
   slayerlog/master_controller_tests.cpp
   slayerlog/settings_ini_tests.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_controller.cpp
@@ -43,6 +44,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_source.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_controller.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_batch.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_text_view.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_view.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_timestamp.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_controller.cpp
@@ -64,6 +66,7 @@ target_link_libraries(
   PRIVATE eestv_lib
           component
           GTest::gtest_main
+          log4cplus::log4cplus
           Boost::log
           Boost::log_setup
           Boost::filesystem

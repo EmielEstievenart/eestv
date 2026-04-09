@@ -144,6 +144,25 @@ TEST(LogModelTest, RenderedLinesReturnsVisibleSlice)
                                           }));
 }
 
+TEST(LogModelTest, MaxRenderedLineWidthTracksVisibleRenderedContent)
+{
+    LogModel model;
+    model.set_show_source_labels(true);
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "short"},
+        ObservedLogLine {"beta.log", "0123456789"},
+    });
+
+    EXPECT_EQ(model.max_rendered_line_width(), static_cast<int>(model.rendered_line(1).size()));
+
+    model.hide_columns(3, 6);
+    EXPECT_EQ(model.max_rendered_line_width(), static_cast<int>(model.rendered_line(1).size()));
+
+    model.add_include_filter("short");
+    EXPECT_EQ(model.max_rendered_line_width(), static_cast<int>(model.rendered_line(0).size()));
+}
+
 TEST(LogModelTest, FiltersApplyRetroactivelyAndToNewLines)
 {
     LogModel model;

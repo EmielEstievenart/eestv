@@ -184,6 +184,44 @@ TEST(LogControllerTest, HandleEventLeftAndRightArrowNavigateFindResults)
     EXPECT_EQ(controller.active_find_visible_index(model)->value, 1);
 }
 
+TEST(LogControllerTest, HorizontalScrollUsesArrowKeysWhenFindInactive)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "abcdefghij"},
+    });
+
+    controller.update_viewport_col_count(5);
+
+    const auto right_result = controller.handle_event(model, ftxui::Event::ArrowRight, 1, {});
+    EXPECT_TRUE(right_result.handled);
+    EXPECT_FALSE(right_result.request_exit);
+    EXPECT_EQ(controller.first_visible_col(model), 1);
+
+    const auto left_result = controller.handle_event(model, ftxui::Event::ArrowLeft, 1, {});
+    EXPECT_TRUE(left_result.handled);
+    EXPECT_FALSE(left_result.request_exit);
+    EXPECT_EQ(controller.first_visible_col(model), 0);
+}
+
+TEST(LogControllerTest, HorizontalScrollClampsToRenderedWidth)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "abcdefghij"},
+    });
+
+    controller.update_viewport_col_count(4);
+    controller.scroll_right(model, 100);
+
+    EXPECT_EQ(controller.first_visible_col(model), model.max_rendered_line_width() - 4);
+
+    controller.scroll_left(model, 100);
+    EXPECT_EQ(controller.first_visible_col(model), 0);
+}
+
 TEST(LogControllerTest, SelectionTracksBoundsAndExtractsText)
 {
     LogModel model;
@@ -216,6 +254,37 @@ TEST(LogControllerTest, SelectionTracksBoundsAndExtractsText)
     EXPECT_TRUE(controller.selection_text(model).empty());
 }
 
+TEST(LogControllerTest, RenderDataBuildsPreviewAndSelectionRanges)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "abcdefghij"},
+    });
+
+    controller.update_viewport_col_count(5);
+    controller.scroll_right(model, 3);
+
+    const auto preview_data = controller.render_data(model, 1, HiddenColumnRange {3, 5});
+    ASSERT_EQ(preview_data.visible_lines.size(), 1U);
+    ASSERT_EQ(preview_data.visible_lines[0].styled_ranges.size(), 1U);
+    EXPECT_EQ(preview_data.first_visible_col, 3);
+    EXPECT_EQ(preview_data.visible_lines[0].styled_ranges[0].style, LogTextViewRangeStyle::HideColumnsPreview);
+    EXPECT_EQ(preview_data.visible_lines[0].styled_ranges[0].col_start, 4);
+    EXPECT_EQ(preview_data.visible_lines[0].styled_ranges[0].col_end, 7);
+
+    controller.begin_selection(model, TextPosition {0, 5});
+    controller.update_selection(model, TextPosition {0, 8});
+    controller.end_selection(model, TextPosition {0, 8});
+
+    const auto selection_data = controller.render_data(model, 1, HiddenColumnRange {3, 5});
+    ASSERT_EQ(selection_data.visible_lines.size(), 1U);
+    ASSERT_EQ(selection_data.visible_lines[0].styled_ranges.size(), 1U);
+    EXPECT_EQ(selection_data.visible_lines[0].styled_ranges[0].style, LogTextViewRangeStyle::Selection);
+    EXPECT_EQ(selection_data.visible_lines[0].styled_ranges[0].col_start, 5);
+    EXPECT_EQ(selection_data.visible_lines[0].styled_ranges[0].col_end, 8);
+}
+
 TEST(LogControllerTest, ResetClearsControllerState)
 {
     LogModel model;
@@ -228,6 +297,9 @@ TEST(LogControllerTest, ResetClearsControllerState)
     ASSERT_TRUE(controller.set_find_query(model, "line", 2));
     ASSERT_TRUE(controller.active_find_visible_index(model).has_value());
 
+    controller.update_viewport_col_count(4);
+    controller.scroll_right(model, 2);
+
     controller.begin_selection(model, TextPosition {0, 1});
     controller.update_selection(model, TextPosition {1, 2});
     EXPECT_TRUE(controller.selection_in_progress());
@@ -235,6 +307,7 @@ TEST(LogControllerTest, ResetClearsControllerState)
     controller.reset();
 
     EXPECT_EQ(controller.first_visible_line_index(model, 2).value, 4);
+    EXPECT_EQ(controller.first_visible_col(model), 0);
     EXPECT_FALSE(controller.active_find_visible_index(model).has_value());
     EXPECT_FALSE(controller.selection_in_progress());
     EXPECT_FALSE(controller.selection_bounds(model).has_value());

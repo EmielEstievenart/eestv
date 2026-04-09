@@ -178,6 +178,8 @@ public:
     int line_count() const;
     /** @brief Returns the total number of observed log lines before filtering. */
     int total_line_count() const;
+    /** @brief Returns the widest fully rendered visible line in bytes. */
+    int max_rendered_line_width() const;
 
     /** @brief Returns a fully rendered line including line number and optional source label. */
     std::string rendered_line(int index) const;
@@ -195,6 +197,7 @@ private:
     };
 
     std::string render_entry(AllLineIndex entry_index) const;
+    int rendered_entry_width(AllLineIndex entry_index) const;
 
     void append_lines_immediately(const std::vector<ObservedLogLine>& lines);
 
@@ -212,6 +215,7 @@ private:
     bool matches_pattern(std::string_view haystack, const SearchPattern& pattern) const;
     bool matches_any_pattern(std::string_view haystack, const std::vector<SearchPattern>& patterns) const;
     static std::string hide_column_range(std::string_view text, HiddenColumnRange range);
+    static int hidden_text_length(std::string_view text, HiddenColumnRange range);
     static std::string trim_filter_text(std::string_view text);
 
     IndexedVector<ObservedLogLine, AllLineIndex> _all_entries;

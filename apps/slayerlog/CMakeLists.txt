@@ -24,6 +24,8 @@ add_executable(
   log_controller.hpp
   log_batch.cpp
   log_batch.hpp
+  log_text_view.cpp
+  log_text_view.hpp
   log_view.cpp
   log_view.hpp
   master_controller.cpp

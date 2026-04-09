@@ -272,6 +272,17 @@ int LogModel::total_line_count() const
     return static_cast<int>(_all_entries.size());
 }
 
+int LogModel::max_rendered_line_width() const
+{
+    int max_width = 0;
+    for (const auto entry_index : _visible_entry_indices)
+    {
+        max_width = std::max(max_width, rendered_entry_width(entry_index));
+    }
+
+    return max_width;
+}
+
 std::string LogModel::rendered_line(int index) const
 {
     const VisibleLineIndex visible_line_index {index};
@@ -344,6 +355,28 @@ std::string LogModel::render_entry(AllLineIndex entry_index) const
     }
 
     return output.str();
+}
+
+int LogModel::rendered_entry_width(AllLineIndex entry_index) const
+{
+    const auto& entry = _all_entries[entry_index];
+
+    int width = static_cast<int>(std::to_string(entry_index.value + 1).size()) + 1;
+    if (_show_source_labels)
+    {
+        width += static_cast<int>(entry.source_label.size()) + 3;
+    }
+
+    if (_hidden_columns.has_value())
+    {
+        width += hidden_text_length(entry.text, *_hidden_columns);
+    }
+    else
+    {
+        width += static_cast<int>(entry.text.size());
+    }
+
+    return width;
 }
 
 void LogModel::append_lines_immediately(const std::vector<ObservedLogLine>& lines)
@@ -524,6 +557,23 @@ std::string LogModel::hide_column_range(std::string_view text, HiddenColumnRange
     result.append(text.substr(0, first_hidden_index));
     result.append(text.substr(last_hidden_exclusive));
     return result;
+}
+
+int LogModel::hidden_text_length(std::string_view text, HiddenColumnRange range)
+{
+    if (range.first_column <= 0 || range.last_column < range.first_column)
+    {
+        return static_cast<int>(text.size());
+    }
+
+    const std::size_t first_hidden_index = static_cast<std::size_t>(range.first_column - 1);
+    if (first_hidden_index >= text.size())
+    {
+        return static_cast<int>(text.size());
+    }
+
+    const std::size_t last_hidden_exclusive = std::min(text.size(), static_cast<std::size_t>(range.last_column));
+    return static_cast<int>(text.size() - (last_hidden_exclusive - first_hidden_index));
 }
 
 std::string LogModel::trim_filter_text(std::string_view text)

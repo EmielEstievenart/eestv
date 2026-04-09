@@ -17,9 +17,62 @@ namespace slayerlog
 namespace
 {
 
+struct RenderedColumnRange
+{
+    int start = 0;
+    int end   = 0;
+};
+
 bool is_before(const TextPosition& lhs, const TextPosition& rhs)
 {
     return lhs.line < rhs.line || (lhs.line == rhs.line && lhs.column < rhs.column);
+}
+
+std::optional<RenderedColumnRange> preview_range_for_line(const std::string& rendered_line, int rendered_text_start_column,
+                                                          const std::optional<HiddenColumnRange>& hide_columns_preview)
+{
+    if (!hide_columns_preview.has_value())
+    {
+        return std::nullopt;
+    }
+
+    const int highlight_start = rendered_text_start_column + hide_columns_preview->first_column - 1;
+    const int highlight_end   = rendered_text_start_column + hide_columns_preview->last_column;
+    const int clamped_start   = std::clamp(highlight_start, 0, static_cast<int>(rendered_line.size()));
+    const int clamped_end     = std::clamp(highlight_end, clamped_start, static_cast<int>(rendered_line.size()));
+    if (clamped_start >= clamped_end)
+    {
+        return std::nullopt;
+    }
+
+    return RenderedColumnRange {
+        clamped_start,
+        clamped_end,
+    };
+}
+
+std::optional<RenderedColumnRange> selection_range_for_line(const std::string& rendered_line, int line_index,
+                                                            const std::optional<std::pair<TextPosition, TextPosition>>& selected_range)
+{
+    if (!selected_range.has_value() || line_index < selected_range->first.line || line_index > selected_range->second.line)
+    {
+        return std::nullopt;
+    }
+
+    const int highlight_start = (line_index == selected_range->first.line) ? selected_range->first.column : 0;
+    const int highlight_end =
+        (line_index == selected_range->second.line) ? selected_range->second.column : static_cast<int>(rendered_line.size());
+    const int clamped_start = std::clamp(highlight_start, 0, static_cast<int>(rendered_line.size()));
+    const int clamped_end   = std::clamp(highlight_end, clamped_start, static_cast<int>(rendered_line.size()));
+    if (clamped_start >= clamped_end)
+    {
+        return std::nullopt;
+    }
+
+    return RenderedColumnRange {
+        clamped_start,
+        clamped_end,
+    };
 }
 
 #ifndef _WIN32
@@ -167,6 +220,8 @@ void LogController::reset()
 {
     _first_visible_line_index = VisibleLineIndex {0};
     _follow_bottom            = true;
+    _first_visible_col        = 0;
+    _viewport_col_count       = 1;
 
     _active_find_entry_index.reset();
 
@@ -183,6 +238,11 @@ VisibleLineIndex LogController::first_visible_line_index(const LogModel& model, 
     }
 
     return VisibleLineIndex {std::clamp(_first_visible_line_index.value, 0, max_first_visible_line_index(model, viewport_line_count))};
+}
+
+int LogController::first_visible_col(const LogModel& model) const
+{
+    return std::clamp(_first_visible_col, 0, max_first_visible_col(model));
 }
 
 void LogController::scroll_up(const LogModel& model, int viewport_line_count, int amount)
@@ -208,6 +268,21 @@ void LogController::scroll_to_top(const LogModel& model, int viewport_line_count
 void LogController::scroll_to_bottom()
 {
     _follow_bottom = true;
+}
+
+void LogController::update_viewport_col_count(int viewport_col_count)
+{
+    _viewport_col_count = std::max(1, viewport_col_count);
+}
+
+void LogController::scroll_left(const LogModel& model, int amount)
+{
+    _first_visible_col = std::max(0, first_visible_col(model) - std::max(1, amount));
+}
+
+void LogController::scroll_right(const LogModel& model, int amount)
+{
+    _first_visible_col = std::min(max_first_visible_col(model), first_visible_col(model) + std::max(1, amount));
 }
 
 bool LogController::go_to_line(const LogModel& model, int line_number, int viewport_line_count)
@@ -414,6 +489,71 @@ std::string LogController::selection_text(const LogModel& model) const
     return output.str();
 }
 
+LogTextViewRenderData LogController::render_data(const LogModel& model, int viewport_line_count,
+                                                 std::optional<HiddenColumnRange> hide_columns_preview) const
+{
+    const int safe_viewport = std::max(1, viewport_line_count);
+    const int total_lines   = model.line_count();
+    const int first_line    = first_visible_line_index(model, safe_viewport).value;
+
+    LogTextViewRenderData data;
+    data.total_lines         = total_lines;
+    data.first_visible_line  = first_line;
+    data.viewport_line_count = safe_viewport;
+    data.first_visible_col   = first_visible_col(model);
+    data.max_line_width      = model.max_rendered_line_width();
+    data.viewport_col_count  = std::max(1, _viewport_col_count);
+    data.empty_text          = model.total_line_count() == 0 ? "1 <empty file>" : "1 <no matching lines>";
+
+    if (total_lines == 0)
+    {
+        return data;
+    }
+
+    const auto selected_range    = selection_bounds(model);
+    const auto effective_preview = selected_range.has_value() ? std::optional<HiddenColumnRange>() : hide_columns_preview;
+    const auto active_find_index = active_find_visible_index(model);
+    const auto rendered_lines    = model.rendered_lines(first_line, safe_viewport);
+
+    data.visible_lines.reserve(rendered_lines.size());
+    for (std::size_t offset = 0; offset < rendered_lines.size(); ++offset)
+    {
+        const int line_index            = first_line + static_cast<int>(offset);
+        const bool is_find_match        = model.find_active() && model.visible_line_matches_find(line_index);
+        const bool is_active_find_match = active_find_index.has_value() && active_find_index->value == line_index;
+        const auto& rendered_line       = rendered_lines[offset];
+        const auto preview_range = preview_range_for_line(rendered_line, model.rendered_text_start_column(line_index), effective_preview);
+        const auto selection_range = selection_range_for_line(rendered_line, line_index, selected_range);
+
+        LogTextViewLine line;
+        line.text            = rendered_line;
+        line.is_find_match   = is_find_match;
+        line.is_active_match = is_active_find_match;
+
+        if (preview_range.has_value())
+        {
+            line.styled_ranges.push_back(LogTextViewStyledRange {
+                preview_range->start,
+                preview_range->end,
+                LogTextViewRangeStyle::HideColumnsPreview,
+            });
+        }
+
+        if (selection_range.has_value())
+        {
+            line.styled_ranges.push_back(LogTextViewStyledRange {
+                selection_range->start,
+                selection_range->end,
+                LogTextViewRangeStyle::Selection,
+            });
+        }
+
+        data.visible_lines.push_back(std::move(line));
+    }
+
+    return data;
+}
+
 LogEventResult
 LogController::handle_event(LogModel& model, ftxui::Event event, int viewport_line_count,
                             const std::function<std::optional<TextPosition>(const ftxui::Mouse& mouse)>& mouse_to_text_position)
@@ -453,6 +593,18 @@ LogController::handle_event(LogModel& model, ftxui::Event event, int viewport_li
     if (model.find_active() && event == ftxui::Event::ArrowLeft)
     {
         return {go_to_previous_find_match(model, viewport_line_count), false};
+    }
+
+    if (event == ftxui::Event::ArrowLeft)
+    {
+        scroll_left(model);
+        return {true, false};
+    }
+
+    if (event == ftxui::Event::ArrowRight)
+    {
+        scroll_right(model);
+        return {true, false};
     }
 
     if (event == ftxui::Event::C)
@@ -615,6 +767,11 @@ bool LogController::copy_selection_to_clipboard(const LogModel& model) const
 int LogController::max_first_visible_line_index(const LogModel& model, int viewport_line_count) const
 {
     return std::max(0, model.line_count() - std::max(1, viewport_line_count));
+}
+
+int LogController::max_first_visible_col(const LogModel& model) const
+{
+    return std::max(0, model.max_rendered_line_width() - std::max(1, _viewport_col_count));
 }
 
 void LogController::center_on_visible_line(const LogModel& model, VisibleLineIndex target_visible_index, int viewport_line_count)
